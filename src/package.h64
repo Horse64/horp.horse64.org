@@ -1,0 +1,135 @@
+# @module main
+# Copyright (c) 2020-2022,  ellie/@ell1e & Horse64 Team (see AUTHORS.md).
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Alternatively, at your option, this file is offered under the Apache 2
+# license, see accompanied LICENSE.md.
+
+import net from core.horse64.org
+import text from core.horse64.org
+
+
+## @func normalize_package_name
+## Normalizes a horp package name.
+## @returns (str or none) returns str with the normalized package
+##   if it was a valid name to start with, otherwise returns none
+func normalize_package_name(h) {
+    h = h + ""
+    if typename(h) != "str" {
+        throw new TypeError("package name must be string")
+    }
+    if not h.contains(".") or h.starts(".") or h.ends(".") {
+        return none
+    }
+    h = h.lower()
+    var dotcount = 0
+    i = 1
+    while i <= h.len {
+        if h[i] == "." and i + 1 <= h.len and h[i + 1] == "." {
+            return none
+        }
+        if h[i] == "." {
+            dotcount += 1
+        }
+        if h[i] == "-" and (i + 1 <= h.len and h[i + 1] == "." or
+                i - 1 >= 1 and h[i - 1] == ".") {
+            return none
+        }
+        var cp = text.code(h[i])
+        if cp <= 127 and (h[i] != "-" or i == 0) and
+                h[i] != "." and
+                (cp < text.code("a") or 
+                cp > text.code("z")) and
+                (cp < text.code("0") or
+                cp > text.code("9")) {
+            return none
+        }
+        i += 1
+    }
+    if dotcount < 2 {
+        return none
+    }
+    return h
+}
+
+
+func get_package_host(package_name, callback) {
+    # Assemble host name candidates:
+    var host_candidates = [package_name]
+    var shorter_name = package_name
+    while yes {
+        var result =
+            remove_subdomain_from_package(shorter_name)
+        if result == none {
+            break
+        }
+        assert(result != package_name)
+        shorter_name = result
+        if shorter_name != package_name {
+            host_candidates.append(shorter_name)
+        }
+    }
+
+    # See if we can use any of them:
+    net.lookup_name(host_candidates, func (err, ips) {
+        if err != none {
+            return callback(err, none)
+        }
+        for candidate in host_candidates {
+            if ips[candidate].len > 0 {
+                return callback(none, candidate)
+            }
+        }
+        var resulterr = new ValueError("No associated "
+            "host found.")
+        return callback(resulterr, none)
+    }, retries=3, retry_delay=0.5)
+}
+
+
+## Trim a given package name, which should always be a domain,
+## by one subdomain.
+## @param pname str The package name to be trimmed by one subdomain.
+## @returns (str or none) Returns the package name with one
+##     subdomain removed from the front. If no subdomain was left,
+##     returns none.
+func remove_subdomain_from_package(pname) {
+    var firstdotpos = none
+    var dotcount = 0
+    var i = 1
+    while i <= pname.len {
+        if pname[i] == "." {
+            if firstdotpos == none {
+                firstdotpos = i
+            }
+            dotcount += 1
+        }
+        i += 1
+    }
+    if dotcount < 2 {
+        return none
+    }
+    assert(firstdotpos > 1)
+    return pname.sub(firstdotpos + 1)
+}
+

@@ -1,0 +1,89 @@
+# @module main
+# Copyright (c) 2020-2022,  ellie/@ell1e & Horse64 Team (see AUTHORS.md).
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Alternatively, at your option, this file is offered under the Apache 2
+# license, see accompanied LICENSE.md.
+
+
+import argparse from core.horse64.org
+import system from core.horse64.org
+
+import package
+
+
+func actionparser_add(args) {
+    var defs = argparse.ArgumentDefs(program_name="horp add")
+    defs.add_arg(
+        "package name", description="The target package to "
+        "install.")
+    defs.add_switch(
+        "--update", takes_arg=no,
+        description="If the package is already installed but "
+            "a newer version is available, upgrade it.")
+    var result = argparse.parse(defs, args)
+    if result.output != "" {
+        print(result.output)
+        return result.exit_code
+    }
+    var package_name = package.
+        normalize_package_name(result.args["package name"])
+    if package_name == none {
+        print("horp: error: not a valid package name: " +
+            result.args["package name"])
+        return 1
+    }
+    package.get_package_host(package_name,
+            func (err, name) {
+        if err != none {
+            print("horp: error: failed to look up package host: " +
+                err.msg)
+            print("Did you enter an existing name?")
+            system.exit(1)
+        }
+        print("Package host: " + name)
+    })
+    return 0
+}
+
+
+func main {
+    var defs = new argparse.ArgumentDefs(program_name="horp")
+    defs.add_arg("action", description="Pick an available actions: "
+        "add, del. To see details for an action, use it with --help "
+        "like e.g.: horp add --help")
+    defs.add_catchall("action args", description="List of "
+        "arguments for the specified action")
+    var result = argparse.parse(defs)
+    if result.output != "" {
+        print(result.output)
+        return result.exit_code
+    }
+    if result.args["action"] == "add" {
+        return actionparser_add(result.args["action args"])
+    } else {
+        print("horp: error: unknown action: " + result.args["action"])
+        print("Use horp --help to show usage.")
+        return 1
+    }
+}
