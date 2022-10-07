@@ -53,15 +53,14 @@ func actionparser_add(args) {
             result.args["package name"])
         return 1
     }
-    package.get_package_host(package_name,
-            func (err, name) {
+    package.get_possible_package_hosts(package_name, func (err, names) {
         if err != none {
             print("horp: error: failed to look up package host: " +
                 err.msg)
             print("Did you enter an existing name?")
             system.exit(1)
         }
-        print("Package host: " + name)
+        print("Package host: " + names[1])
     })
     return 0
 }

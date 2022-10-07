@@ -26,6 +26,7 @@
 # license, see accompanied LICENSE.md.
 
 import net from core.horse64.org
+import net.fetch from core.horse64.org
 import text from core.horse64.org
 
 
@@ -73,7 +74,7 @@ func normalize_package_name(h) {
 }
 
 
-func get_package_host(package_name, callback) {
+func get_possible_package_hosts(package_name, callback) {
     # Assemble host name candidates:
     var host_candidates = [package_name]
     var shorter_name = package_name
@@ -95,15 +96,32 @@ func get_package_host(package_name, callback) {
         if err != none {
             return callback(err, none)
         }
+        var result = []
         for candidate in host_candidates {
             if ips[candidate].len > 0 {
-                return callback(none, candidate)
+                result.append(candidate)
             }
         }
+        if result.len > 0 {
+            result.reverse()
+            return callback(none, result)
+        }
         var resulterr = new ValueError("No associated "
-            "host found.")
+            "hostname found.")
         return callback(resulterr, none)
     }, retries=3, retry_delay=0.5)
+}
+
+
+func get_package_redirect_horp_ini(package_name, callback) {
+    get_possible_package_hosts(packagename, func(err, hosts) {
+        if err != none {
+            return callback(err, none)
+        }
+        func check_next_host {
+
+        }
+    })
 }
 
 
