@@ -1,4 +1,4 @@
-# @module main
+# @module package.servermeta
 # Copyright (c) 2020-2022,  ellie/@ell1e & Horse64 Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,60 +27,19 @@
 
 import net from core.horse64.org
 import net.fetch from core.horse64.org
-import text from core.horse64.org
+
+import package
 
 
-## @func normalize_package_name
-## Normalizes a horp package name.
-## @returns (str or none) returns str with the normalized package
-##   if it was a valid name to start with, otherwise returns none
-func normalize_package_name(h) {
-    h = h + ""
-    if typename(h) != "str" {
-        throw new TypeError("package name must be string")
-    }
-    if not h.contains(".") or h.starts(".") or h.ends(".") {
-        return none
-    }
-    h = h.lower()
-    var dotcount = 0
-    i = 1
-    while i <= h.len {
-        if h[i] == "." and i + 1 <= h.len and h[i + 1] == "." {
-            return none
-        }
-        if h[i] == "." {
-            dotcount += 1
-        }
-        if h[i] == "-" and (i + 1 <= h.len and h[i + 1] == "." or
-                i - 1 >= 1 and h[i - 1] == ".") {
-            return none
-        }
-        var cp = text.code(h[i])
-        if cp <= 127 and (h[i] != "-" or i == 0) and
-                h[i] != "." and
-                (cp < text.code("a") or 
-                cp > text.code("z")) and
-                (cp < text.code("0") or
-                cp > text.code("9")) {
-            return none
-        }
-        i += 1
-    }
-    if dotcount < 2 {
-        return none
-    }
-    return h
-}
-
-
-func get_possible_package_hosts(package_name, callback) {
+func get_possible_package_hosts(
+        package_name, callback, verbose=no
+        ) {
     # Assemble host name candidates:
     var host_candidates = [package_name]
     var shorter_name = package_name
     while yes {
         var result =
-            remove_subdomain_from_package(shorter_name)
+            package.remove_subdomain_from_package(shorter_name)
         if result == none {
             break
         }
@@ -92,8 +51,17 @@ func get_possible_package_hosts(package_name, callback) {
     }
 
     # See if we can use any of them:
+    if verbose {
+        print("horp: debug: get_possible_package_hosts(): "
+            "will now look up these hosts: " +
+            host_candidates.as_str())
+    }
     net.lookup_name(host_candidates, func (err, ips) {
         if err != none {
+            if verbose {
+                print("horp: debug: get_possible_package_hosts(): "
+                    "resolver failure")
+            }
             return callback(err, none)
         }
         var result = []
@@ -103,7 +71,10 @@ func get_possible_package_hosts(package_name, callback) {
             }
         }
         if result.len > 0 {
-            result.reverse()
+            if verbose {
+                print("horp: debug: get_possible_package_hosts(): "
+                    "lookups complete, some successful")
+            }
             return callback(none, result)
         }
         var resulterr = new ValueError("No associated "
@@ -113,41 +84,66 @@ func get_possible_package_hosts(package_name, callback) {
 }
 
 
-func get_package_redirect_horp_ini(package_name, callback) {
+func host_to_package_uri(h) {
+    if typename(h) == bytes {
+        h = h.as_str()
+    }
+    if typename(h) != "str" or h.contains("/") or
+            h.contains("://") or not h.contains(".") {
+        throw new ValueException("Not a valid host.")
+    }
+    return "https://" + h + "/.well-known/horp-package-info/horp.ini"
+}
+
+
+func get_package_servermeta_ini(
+        package_name, callback, verbose=no
+        ) {
     get_possible_package_hosts(packagename, func(err, hosts) {
         if err != none {
             return callback(err, none)
         }
-        func check_next_host {
-
+        var query_uris = []
+        for host in hosts {
+            query_uris.add(host_to_package_uri(host))
         }
-    })
-}
+        if verbose {
+            print("horp: debug: get_package_servermeta_ini(): "
+                "will consecutively try " +
+                query_uris.len.as_str() + " URI(s)...")
+        }
+        query_uris.reverse()
 
+        func try_next_uri {
+            var next_uri = query_uris.pop()
 
-## Trim a given package name, which should always be a domain,
-## by one subdomain.
-## @param pname str The package name to be trimmed by one subdomain.
-## @returns (str or none) Returns the package name with one
-##     subdomain removed from the front. If no subdomain was left,
-##     returns none.
-func remove_subdomain_from_package(pname) {
-    var firstdotpos = none
-    var dotcount = 0
-    var i = 1
-    while i <= pname.len {
-        if pname[i] == "." {
-            if firstdotpos == none {
-                firstdotpos = i
+            if verbose {
+                print("horp: debug: get_package_servermeta_ini(): "
+                    "trying next URI: " +
+                    next_uri)
             }
-            dotcount += 1
+            net.fetch.as_str(next_uri, func (err, result) {
+                if err != none {
+                    if query_uris.len == 0 {
+                        # None left to try. Just spit out the error:
+                        if verbose {
+                            print("horp: debug: "
+                                "get_package_servermeta_ini(): "
+                                "all candidates failed, returning error")
+                        }
+                        return callback(err, none)
+                    }
+                    return try_next_uri()
+                }
+                if verbose {
+                    print("horp: debug: "
+                        "get_package_servermeta_ini(): "
+                        "success fetching URI: " + next_uri)
+                }
+                return callback(none, [next_uri, result])
+            }, max_size=(2 * 1024),)
         }
-        i += 1
-    }
-    if dotcount < 2 {
-        return none
-    }
-    assert(firstdotpos > 1)
-    return pname.sub(firstdotpos + 1)
+        try_next_uri()
+    }, verbose=verbose)
 }
 

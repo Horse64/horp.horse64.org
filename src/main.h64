@@ -30,9 +30,10 @@ import argparse from core.horse64.org
 import system from core.horse64.org
 
 import package
+import package.servermeta
 
 
-func actionparser_add(args) {
+func actionparser_add(args, verbose=no) {
     var defs = argparse.ArgumentDefs(program_name="horp add")
     defs.add_arg(
         "package name", description="The target package to "
@@ -41,10 +42,15 @@ func actionparser_add(args) {
         "--update", takes_arg=no,
         description="If the package is already installed but "
             "a newer version is available, upgrade it.")
+    defs.add_switch("--verbose", description="Output extra information "
+        "when doing things.")
     var result = argparse.parse(defs, args)
     if result.output != "" {
         print(result.output)
         return result.exit_code
+    }
+    if result.args["--verbose"] {
+        verbose = yes
     }
     var package_name = package.
         normalize_package_name(result.args["package name"])
@@ -53,15 +59,16 @@ func actionparser_add(args) {
             result.args["package name"])
         return 1
     }
-    package.get_possible_package_hosts(package_name, func (err, names) {
-        if err != none {
-            print("horp: error: failed to look up package host: " +
-                err.msg)
-            print("Did you enter an existing name?")
-            system.exit(1)
-        }
-        print("Package host: " + names[1])
-    })
+    package.servermeta.get_possible_package_hosts(
+        package_name, func (err, names) {
+            if err != none {
+                print("horp: error: failed to look up package host: " +
+                    err.msg)
+                print("Did you enter an existing name?")
+                system.exit(1)
+            }
+            print("Package host: " + names[1])
+    }, verbose=verbose)
     return 0
 }
 
@@ -73,13 +80,16 @@ func main {
         "like e.g.: horp add --help")
     defs.add_catchall("action args", description="List of "
         "arguments for the specified action")
+    defs.add_switch("--verbose", description="Output extra information "
+        "when doing things.")
     var result = argparse.parse(defs)
     if result.output != "" {
         print(result.output)
         return result.exit_code
     }
     if result.args["action"] == "add" {
-        return actionparser_add(result.args["action args"])
+        return actionparser_add(result.args["action args"],
+            verbose=result.args["--verbose"])
     } else {
         print("horp: error: unknown action: " + result.args["action"])
         print("Use horp --help to show usage.")
