@@ -60,7 +60,7 @@ func actionparser_add(args, verbose=no) {
         return 1
     }
     package.servermeta.get_possible_package_hosts(
-        package_name, func (err, names) {
+        package_name, verbose=verbose, func (err, names) {
             if err != none {
                 print("horp: error: failed to look up package host: " +
                     err.msg)
@@ -68,7 +68,7 @@ func actionparser_add(args, verbose=no) {
                 system.exit(1)
             }
             print("Package host: " + names[1])
-    }, verbose=verbose)
+    })
     return 0
 }
 

@@ -56,31 +56,32 @@ func get_possible_package_hosts(
             "will now look up these hosts: " +
             host_candidates.as_str())
     }
-    net.lookup_name(host_candidates, func (err, ips) {
-        if err != none {
-            if verbose {
-                print("horp: debug: get_possible_package_hosts(): "
-                    "resolver failure")
+    net.lookup_name(host_candidates, retries=3, retry_delay=0.5,
+        func (err, ips) {
+            if err != none {
+                if verbose {
+                    print("horp: debug: get_possible_package_hosts(): "
+                        "resolver failure")
+                }
+                return callback(err, none)
             }
-            return callback(err, none)
-        }
-        var result = []
-        for candidate in host_candidates {
-            if ips[candidate].len > 0 {
-                result.append(candidate)
+            var result = []
+            for candidate in host_candidates {
+                if ips[candidate].len > 0 {
+                    result.append(candidate)
+                }
             }
-        }
-        if result.len > 0 {
-            if verbose {
-                print("horp: debug: get_possible_package_hosts(): "
-                    "lookups complete, some successful")
+            if result.len > 0 {
+                if verbose {
+                    print("horp: debug: get_possible_package_hosts(): "
+                        "lookups complete, some successful")
+                }
+                return callback(none, result)
             }
-            return callback(none, result)
-        }
-        var resulterr = new ValueError("No associated "
-            "hostname found.")
-        return callback(resulterr, none)
-    }, retries=3, retry_delay=0.5)
+            var resulterr = new ValueError("No associated "
+                "hostname found.")
+            return callback(resulterr, none)
+    })
 }
 
 
@@ -99,51 +100,53 @@ func host_to_package_uri(h) {
 func get_package_servermeta_ini(
         package_name, callback, verbose=no
         ) {
-    get_possible_package_hosts(packagename, func(err, hosts) {
-        if err != none {
-            return callback(err, none)
-        }
-        var query_uris = []
-        for host in hosts {
-            query_uris.add(host_to_package_uri(host))
-        }
-        if verbose {
-            print("horp: debug: get_package_servermeta_ini(): "
-                "will consecutively try " +
-                query_uris.len.as_str() + " URI(s)...")
-        }
-        query_uris.reverse()
-
-        func try_next_uri {
-            var next_uri = query_uris.pop()
-
+    get_possible_package_hosts(
+        packagename, verbose=verbose, func(err, hosts) {
+            if err != none {
+                return callback(err, none)
+            }
+            var query_uris = []
+            for host in hosts {
+                query_uris.add(host_to_package_uri(host))
+            }
             if verbose {
                 print("horp: debug: get_package_servermeta_ini(): "
-                    "trying next URI: " +
-                    next_uri)
+                    "will consecutively try " +
+                    query_uris.len.as_str() + " URI(s)...")
             }
-            net.fetch.as_str(next_uri, func (err, result) {
-                if err != none {
-                    if query_uris.len == 0 {
-                        # None left to try. Just spit out the error:
+            query_uris.reverse()
+
+            func try_next_uri {
+                var next_uri = query_uris.pop()
+
+                if verbose {
+                    print("horp: debug: get_package_servermeta_ini(): "
+                        "trying next URI: " +
+                        next_uri)
+                }
+                net.fetch.as_str(next_uri, max_size=(2 * 1024),
+                    func (err, result) {
+                        if err != none {
+                            if query_uris.len == 0 {
+                                # None left to try. Just spit out the error:
+                                if verbose {
+                                    print("horp: debug: "
+                                        "get_package_servermeta_ini(): "
+                                        "all candidates failed, returning error")
+                                }
+                                return callback(err, none)
+                            }
+                            return try_next_uri()
+                        }
                         if verbose {
                             print("horp: debug: "
                                 "get_package_servermeta_ini(): "
-                                "all candidates failed, returning error")
+                                "success fetching URI: " + next_uri)
                         }
-                        return callback(err, none)
-                    }
-                    return try_next_uri()
-                }
-                if verbose {
-                    print("horp: debug: "
-                        "get_package_servermeta_ini(): "
-                        "success fetching URI: " + next_uri)
-                }
-                return callback(none, [next_uri, result])
-            }, max_size=(2 * 1024),)
-        }
-        try_next_uri()
-    }, verbose=verbose)
+                        return callback(none, [next_uri, result])
+                })
+            }
+            try_next_uri()
+    })
 }
 
