@@ -36,8 +36,8 @@ import package.servermeta
 func actionparser_add(args, verbose=no) {
     var defs = argparse.ArgumentDefs(program_name="horp add")
     defs.add_arg(
-        "package name", description="The target package to "
-        "install.")
+        "target name", description="The name of the package to "
+        "install, or an install source like a folder with its contents.")
     defs.add_switch(
         "--update", takes_arg=no,
         description="If the package is already installed but "
@@ -53,21 +53,21 @@ func actionparser_add(args, verbose=no) {
         verbose = yes
     }
     var package_name = package.
-        normalize_package_name(result.args["package name"])
+        normalize_package_name(result.args["target name"])
     if package_name == none {
         print("horp: error: not a valid package name: " +
-            result.args["package name"])
+            result.args["target name"])
         return 1
     }
-    package.servermeta.get_possible_package_hosts(
-        package_name, verbose=verbose, func (err, names) {
+    package.servermeta.get_servermeta_ini_by_package_name(
+        package_name, verbose=verbose, func (err, url, contents) {
             if err != none {
-                print("horp: error: failed to look up package host: " +
+                print("horp: error: failed to get server meta horp.ini: " +
                     err.msg)
-                print("Did you enter an existing name?")
+                print("Did you target an existing horp package?")
                 system.exit(1)
             }
-            print("Package host: " + names[1])
+            print("Package ini url: " + url)
     })
     return 0
 }

@@ -97,13 +97,13 @@ func host_to_package_uri(h) {
 }
 
 
-func get_package_servermeta_ini(
+func get_servermeta_ini_by_package_name(
         package_name, callback, verbose=no
         ) {
     get_possible_package_hosts(
-        packagename, verbose=verbose, func(err, hosts) {
+        package_name, verbose=verbose, func(err, hosts) {
             if err != none {
-                return callback(err, none)
+                return callback(err, none, none)
             }
             var query_uris = []
             for host in hosts {
@@ -124,7 +124,7 @@ func get_package_servermeta_ini(
                         "trying next URI: " +
                         next_uri)
                 }
-                net.fetch.as_str(next_uri, max_size=(2 * 1024),
+                net.fetch.get_str(next_uri, max_size=(2 * 1024),
                     func (err, result) {
                         if err != none {
                             if query_uris.len == 0 {
@@ -134,7 +134,7 @@ func get_package_servermeta_ini(
                                         "get_package_servermeta_ini(): "
                                         "all candidates failed, returning error")
                                 }
-                                return callback(err, none)
+                                return callback(err, none, none)
                             }
                             return try_next_uri()
                         }
@@ -143,7 +143,7 @@ func get_package_servermeta_ini(
                                 "get_package_servermeta_ini(): "
                                 "success fetching URI: " + next_uri)
                         }
-                        return callback(none, [next_uri, result])
+                        return callback(none, next_uri, result)
                 })
             }
             try_next_uri()
