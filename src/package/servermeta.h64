@@ -101,52 +101,53 @@ func get_servermeta_ini_by_package_name(
         package_name, callback, verbose=no
         ) {
     get_possible_package_hosts(
-        package_name, verbose=verbose, func(err, hosts) {
-            if err != none {
+        package_name, verbose=verbose,
+    ) then err, hosts:
+
+    if err != none {
+        return callback(err, none, none)
+    }
+    var query_uris = []
+    for host in hosts {
+        query_uris.add(host_to_package_uri(host))
+    }
+    if verbose {
+        print("horp: debug: get_package_servermeta_ini(): "
+            "will consecutively try " +
+            query_uris.len.as_str() + " URI(s)...")
+    }
+    query_uris.reverse()
+
+    func try_next_uri {
+        var next_uri = query_uris.pop()
+
+        if verbose {
+            print("horp: debug: get_package_servermeta_ini(): "
+                "trying next URI: " +
+                next_uri)
+        }
+        net.fetch.get_str(next_uri, max_size=(2 * 1024))
+        then err, result:
+
+        if err != none {
+            if query_uris.len == 0 {
+                # None left to try. Just spit out the error:
+                if verbose {
+                    print("horp: debug: "
+                        "get_package_servermeta_ini(): "
+                        "all candidates failed, returning error")
+                }
                 return callback(err, none, none)
             }
-            var query_uris = []
-            for host in hosts {
-                query_uris.add(host_to_package_uri(host))
-            }
-            if verbose {
-                print("horp: debug: get_package_servermeta_ini(): "
-                    "will consecutively try " +
-                    query_uris.len.as_str() + " URI(s)...")
-            }
-            query_uris.reverse()
-
-            func try_next_uri {
-                var next_uri = query_uris.pop()
-
-                if verbose {
-                    print("horp: debug: get_package_servermeta_ini(): "
-                        "trying next URI: " +
-                        next_uri)
-                }
-                net.fetch.get_str(next_uri, max_size=(2 * 1024),
-                    func (err, result) {
-                        if err != none {
-                            if query_uris.len == 0 {
-                                # None left to try. Just spit out the error:
-                                if verbose {
-                                    print("horp: debug: "
-                                        "get_package_servermeta_ini(): "
-                                        "all candidates failed, returning error")
-                                }
-                                return callback(err, none, none)
-                            }
-                            return try_next_uri()
-                        }
-                        if verbose {
-                            print("horp: debug: "
-                                "get_package_servermeta_ini(): "
-                                "success fetching URI: " + next_uri)
-                        }
-                        return callback(none, next_uri, result)
-                })
-            }
-            try_next_uri()
-    })
+            return try_next_uri()
+        }
+        if verbose {
+            print("horp: debug: "
+                "get_package_servermeta_ini(): "
+                "success fetching URI: " + next_uri)
+        }
+        return callback(none, next_uri, result)
+    }
+    try_next_uri()
 }
 
