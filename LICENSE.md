@@ -244,15 +244,20 @@ following **Apache 2 License**:
    limitations under the License.
 ```
 
-If you contribute to the project, you **agree to both licensing types**
-as well as below **Developer Certificate of Origin**.
+## Contributions
+
+If you contribute to the project, you **permit licensing as described
+in this file** and agree to the [DCO](#Developer Certificate
+of Origin) below.
+
+For this, sign your commit messages:
+
+`DCO-1.1-Signed-off-by: Your Name <your@email>`
 
 
 ## Developer Certificate of Origin
 
-This is the Developer Certificate of Origin indicated by
-`DCO-1.1-Signed-off-by: name <email>` commit messages, which all
-contributors agree to adhere to:
+This is the DCO which all contributors agree to:
 
 ```
 Developer Certificate of Origin
@@ -290,4 +295,12 @@ By making a contribution to this project, I certify that:
     maintained indefinitely and may be redistributed consistent with
     this project or the open source license(s) involved.
 ```
+
+
+# Horp Binaries
+
+Official binaries contain other components with other licensing,
+`horp license .` can help track them down.
+This usually includes the [logo, not to be used in forks](
+    https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#logo-license)!
 
