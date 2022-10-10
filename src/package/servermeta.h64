@@ -25,13 +25,24 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
-import confparse form core.horse64.org
+import confparse from core.horse64.org
 import net from core.horse64.org
 import net.fetch from core.horse64.org
 
 import package
 
 
+## @func get_possible_package_hosts
+## For a given package name, find the associated
+## internet addresses which can be tested for serving
+## the server meta ini config (which has the package's
+## authoritative repository location).
+#
+## @param package_name str The name of the package.
+## @param callback func A callback with arguments `err, hosts`
+##   where err will be a @{ValueError} or networking
+##   error on failure or otherwise @{none}, and `hosts` will
+##   be a @{list} of @{strings|str} on success.
 func get_possible_package_hosts(
         package_name, callback, verbose=no
         ) {
@@ -57,32 +68,37 @@ func get_possible_package_hosts(
             "will now look up these hosts: " +
             host_candidates.as_str())
     }
-    net.lookup_name(host_candidates, retries=3, retry_delay=0.5,
-        func (err, ips) {
-            if err != none {
-                if verbose {
-                    print("horp: debug: get_possible_package_hosts(): "
-                        "resolver failure")
-                }
-                return callback(err, none)
-            }
-            var result = []
-            for candidate in host_candidates {
-                if ips[candidate].len > 0 {
-                    result.append(candidate)
-                }
-            }
-            if result.len > 0 {
-                if verbose {
-                    print("horp: debug: get_possible_package_hosts(): "
-                        "lookups complete, some successful")
-                }
-                return callback(none, result)
-            }
-            var resulterr = new ValueError("No associated "
-                "hostname found.")
-            return callback(resulterr, none)
-    })
+    net.lookup_name(
+        host_candidates, retries=3, retry_delay=0.5
+    ) then err, ips:
+
+    # If we got an error that is alike a networking
+    # failure (rather than NXDOMAIN), return general failure:
+    if err != none {
+        if verbose {
+            print("horp: debug: get_possible_package_hosts(): "
+                "resolver failure")
+        }
+        return callback(err, none)
+    }
+
+    # Otherwise, return the domains for which we got an address:
+    var result = []
+    for candidate in host_candidates {
+        if ips[candidate].len > 0 {
+            result.append(candidate)
+        }
+    }
+    if result.len > 0 {
+        if verbose {
+            print("horp: debug: get_possible_package_hosts(): "
+                "lookups complete, some successful")
+        }
+        return callback(none, result)
+    }
+    var resulterr = new ValueError("No associated "
+        "hostname found.")
+    return callback(resulterr, none)
 }
 
 
@@ -157,7 +173,8 @@ func get_servermeta_info_by_package_name(
         var result = new ServerMetaInfo()
         result.raw_contents = result_str
         do {
-            result.values = parse_conf_str(result.raw_contents)
+            result.values =
+                confparse.parse_conf_str(result.raw_contents)
         } rescue confparse.ConfParseError as e {
             if verbose {
                 print("horp: verbose: "
