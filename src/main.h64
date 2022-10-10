@@ -59,8 +59,8 @@ func actionparser_add(args, verbose=no) {
             result.args["target name"])
         return 1
     }
-    package.servermeta.get_servermeta_ini_by_package_name(
-        package_name, verbose=verbose, func (err, url, contents) {
+    package.servermeta.get_servermeta_info_by_package_name(
+        package_name, verbose=verbose, func (err, url, info) {
             if err != none {
                 print("horp: error: failed to get server meta horp.ini: " +
                     err.msg)

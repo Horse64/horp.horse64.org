@@ -25,6 +25,7 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
+import confparse form core.horse64.org
 import net from core.horse64.org
 import net.fetch from core.horse64.org
 
@@ -89,15 +90,21 @@ func host_to_package_uri(h) {
     if typename(h) == bytes {
         h = h.as_str()
     }
-    if typename(h) != "str" or h.contains("/") or
-            h.contains("://") or not h.contains(".") {
+    if typename(h) != "str" or h.has("/") or
+            h.has("://") or not h.has(".") {
         throw new ValueException("Not a valid host.")
     }
     return "https://" + h + "/.well-known/horp-package-info/horp.ini"
 }
 
 
-func get_servermeta_ini_by_package_name(
+type ServerMetaInfo {
+    var raw_contents = ""
+    var values = {->}
+}
+
+
+func get_servermeta_info_by_package_name(
         package_name, callback, verbose=no
         ) {
     get_possible_package_hosts(
@@ -127,7 +134,7 @@ func get_servermeta_ini_by_package_name(
                 next_uri)
         }
         net.fetch.get_str(next_uri, max_size=(2 * 1024))
-        then err, result:
+        then err, result_str:
 
         if err != none {
             if query_uris.len == 0 {
@@ -146,8 +153,21 @@ func get_servermeta_ini_by_package_name(
                 "get_package_servermeta_ini(): "
                 "success fetching URI: " + next_uri)
         }
+
+        var result = new ServerMetaInfo()
+        result.raw_contents = result_str
+        do {
+            result.values = parse_conf_str(result.raw_contents)
+        } rescue confparse.ConfParseError as e {
+            if verbose {
+                print("horp: verbose: "
+                    "get_package_servermeta_ini(): "
+                    "oops, .ini at this URI is malformed: " +
+                    next_uri)
+            }
+            return callback(e, none)
+        }
         return callback(none, next_uri, result)
     }
     try_next_uri()
 }
-

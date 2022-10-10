@@ -37,7 +37,7 @@ func normalize_package_name(h) {
     if typename(h) != "str" {
         throw new TypeError("package name must be string")
     }
-    if not h.contains(".") or h.starts(".") or h.ends(".") {
+    if not h.has(".") or h.starts(".") or h.ends(".") {
         return none
     }
     h = h.lower()
