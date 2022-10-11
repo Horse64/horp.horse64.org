@@ -248,6 +248,6 @@ following **Apache 2 License**:
 ## Contributions, Binaries
 
 Same rules apply as for [main repo contributions, including the DCO](
-    https://codeberg.org/Horse64/horp.horse64.org/src/branch/main/LICENSE.md#contributions). Also, official horp binaries may include [the official logo](
-    https://codeberg.org/Horse64/horp.horse64.org/src/branch/main/LICENSE.md#logo-licensing).
+    https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#contributions). Also, official horp binaries may include [the official logo](
+    https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#logo-licensing).
 
