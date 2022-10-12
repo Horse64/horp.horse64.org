@@ -1,0 +1,188 @@
+# @module package.ref
+# Copyright (c) 2020-2022,  ellie/@ell1e & Horse64 Team (see AUTHORS.md).
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Alternatively, at your option, this file is offered under the Apache 2
+# license, see accompanied LICENSE.md.
+
+
+import system from core.horse64.org
+
+import package
+
+
+const version_comp_tokens = {
+    "==", ">=", "<=", "!=", ">", "<"
+}
+
+
+type PackageRef {
+    var orig_str
+    var package_name
+    var constraints
+    var source_uri
+}
+
+
+type PackageNameWithConstraints {
+    var orig_str
+    var package_name
+    var constraints
+}
+
+
+func PackageNameWithConstraints.init(
+        pkgname, constraints, orig_str=none) {
+    self.package_name = pkgname
+    self.constraints = constraints
+    self.orig_str = orig_str
+}
+
+
+func get_first_comparable_pos(s) {
+    var comp_pos = none
+    for comp in version_comp_tokens {
+        var new_comp_pos = s.find(comp)
+        if comp_pos == none or
+                (new_comp_pos != none and
+                new_comp_pos < comp_pos) {
+            comp_pos = new_comp_pos
+        }
+    }
+    return comp_pos
+}
+
+
+func extract_first_pkgname_with_constraints(s) {
+    # Prepare string to be in required format:
+    if typename(s) != "str" {
+        return none
+    }
+    var orig_s = s
+    var leading_space_trimmed = (s.len - s.trim().len)
+    s = s.replace("\r", " ").replace("\n", " ").
+        replace("\t", " ").trim()
+
+    # See where the first constraint starts, if any:
+    var comp_pos = get_first_comparable_pos(s)
+
+    # Extract package name before constraints:
+    var pkgname = none
+    if comp_pos != none {
+        pkgname = s.sub(1, comp_pos - 1).trim()
+    } else {
+        pkgname = s.trim()
+    }
+    var space_pos = pkgname.find(" ")
+    if space_pos != none {
+        # Everything past the space might be different packages.
+        # Only extract the first one:
+        pkgname = pkgname.sub(1, space_pos)
+        comp_pos = none
+    }
+    pkgname = package.normalize_package_name(pkgname)
+    if pkgname == none {
+        return none
+    }
+    if comp_pos == none {
+        # No constraints at all, so we arrived at the end:
+        if space_pos == none {
+            return PackageNameWithConstraints(
+                pkgname, [], orig_str=orig_s)
+        } else {
+            return new PackageNameWithConstraints(
+                pkgname, [], orig_str=orig_s.sub(1,
+                    leading_space_trimmed + space_pos - 1))
+        }
+    }
+
+    # Okay, now go through all appended constraints:
+    var constraints = []
+    while comp_pos != none {
+        # See where this constraint ends:
+        var pos_past_comp = comp_pos + 1
+        if pos_past_comp <= s.len and
+                s[pos_past_comp] == "=" {
+            pos_past_comp += 1
+        }
+        var past_constraint_pos = pos_past_comp
+        var constraint_op = s.sub(comp_pos, pos_past_comp - 1)
+
+        # First, skip all whitespace in front of the constraint arg:
+        while past_constraint_pos <= s.len and
+                s[past_constraint_pos] == " " {
+            past_constraint_pos += 1
+        }
+        # Then, process non-whitespace that is the constraint arg:
+        var constraint_arg_start = past_constraint_pos
+        while past_constraint_pos <= s.len and
+                (not {" ", ";", "=", "!", "@"}.has(
+                    s[past_constraint_pos])) {
+            past_constraint_pos += 1
+        }
+        var constraint_arg = s.sub(
+            constraint_arg_start, past_constraint_pos - 1)
+        # Then, skip all trailing whitespace after constraint arg:
+        while past_constraint_pos <= s.len and
+                s[past_constraint_pos] == " " {
+            past_constraint_pos += 1
+        }
+        var constraint = none
+        if constraint_arg.len > 0 {
+            constraints.add([constraint_op, constraint_arg])
+        }
+
+        # See whether a constraint follows:
+        if past_constraint_pos > s.len or
+                s[past_constraint_pos] != ";" or
+                get_first_comparable_pos(
+                s.sub(past_constraint_pos + 1).trim()) == none {
+            # Whatever follows, not a valid chained constraint.
+            # So we're done!
+            var entire_parsed_len =
+                leading_space_trimmed + past_constraint_pos - 1
+            if past_constraint_pos <= s.len and
+                    s[past_constraint_pos] == ";" {
+                entire_parsed_len += 1
+            }
+            return new PackageNameWithConstraints(
+                pkgname, constraints, orig_str=orig_s.sub(1,
+                    entire_parsed_len))
+        }
+
+        # Advance to next constraint to do another extract loop:
+        assert(s[past_constraint_pos] == ";")
+        var i = past_constraint_pos + 1
+        var new_comp_pos = get_first_comparable_pos(s.sub(i))
+        assert(new_comp_pos != none)
+        comp_pos = new_comp_pos + (i - 1)
+        assert({">", "<", "!", "="}.has(s[comp_pos]))
+    }
+}
+
+
+func parse_package_ref(ref) {
+    if typename(ref) != str {
+        return none
+    }
+}

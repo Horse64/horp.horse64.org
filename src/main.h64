@@ -60,16 +60,17 @@ func actionparser_add(args, verbose=no) {
         return 1
     }
     package.servermeta.get_servermeta_info_by_package_name(
-        package_name, verbose=verbose, func (err, info) {
-            if err != none {
-                print("horp: error: Failed to get server meta horp.ini: " +
-                    err.msg)
-                print("Did you target an existing horp package?")
-                system.exit(1)
-            }
-            print("Package ini url: " + info.source_uri)
-    })
-    return 0
+        package_name, verbose=verbose
+    ) then err, info:
+
+    if err != none {
+        print("horp: error: Failed to get server meta horp.ini: " +
+            err.msg)
+        print("Did you target an existing horp package?")
+        system.exit(1)
+    }
+    print("Package ini url: " + info.uri)
+    print("Package sources: " + info.sources.as_str())
 }
 
 
