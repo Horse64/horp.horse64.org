@@ -114,9 +114,46 @@ func host_to_package_uri(h) {
 }
 
 
+type PackageSource {
+    var package_name
+    var source_uri
+}
+
+
+func PackageSource.init(package_name, source_uri) {
+    self.package_name = package_name
+    self.source_uri = source_uri
+}
+
+
 type ServerMetaInfo {
-    var raw_contents = ""
-    var values = {->}
+    var raw_values protect = {->}
+    var sources protect = {->}
+    var uri = none
+}
+
+
+func ServerMetaInfo.update_from_config(values, from_uri=none) {
+    self.uri = uri
+    self.raw_values = values
+    self.sources = {->}
+    if "package sources" in self.raw_values {
+        for key in self.values["package sources"] {
+            if not key.endswith(" source") {
+                continue
+            }
+            var value = self.values["package_sources"][key]
+            var package_name = key.sub(1,
+                key.len - " source".len)
+            if package.normalize_package_name(
+                    package_name) == none {
+                continue
+            }
+            self.sources.add(
+                PackageSource(package_name, value)
+            )
+        }
+    }
 }
 
 
@@ -170,11 +207,13 @@ func get_servermeta_info_by_package_name(
                 "success fetching URI: " + next_uri)
         }
 
+        assert(result_str != none)
         var result = new ServerMetaInfo()
-        result.raw_contents = result_str
         do {
-            result.values =
-                confparse.parse_conf_str(result.raw_contents)
+            result.update_from_config(
+                confparse.parse_conf_str(result_str),
+                uri=next_uri
+            )
         } rescue confparse.ConfParseError as e {
             if verbose {
                 print("horp: verbose: "
