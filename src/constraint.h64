@@ -89,8 +89,8 @@ func guess_versions_from_constraints_naively(constraints) {
 
 
 func verify_constraints_for_versions(constraints) {
-    if constraints.len < 0 {
-        return yes
+    if constraints.len <= 0 {
+        return []
     }
 
     # Collect what type of constraint ops we even use:
@@ -107,12 +107,13 @@ func verify_constraints_for_versions(constraints) {
     var versions = guess_versions_from_constraints_naively(
         constraints
     )
-    if versions == none {
-        if constraint_ops_seen.len != 1 or
-                not constraint_ops_seen.has(">") {
+    if versions.len == 0 {
+        if constraint_ops_seen.len > 1 or (
+                constraint_ops_seen.len == 1 and
+                not constraint_ops_seen.has(">")) {
             throw new ValueError(
                 "Constraints must not potentially block latest "
-                "release without suggesting a working release. "
+                "version without suggesting a working version. "
                 "Try using an additional '>=' constraint?"
             )
         } else {

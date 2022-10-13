@@ -191,7 +191,7 @@ func test_parse_package_refs {
         )
     } rescue ValueError as e {
         had_error = yes
-        assert(e.msg.lower().has("implying version"))
+        assert(e.msg.lower().has("block latest version"))
         assert(e.msg.lower().has("constraint"))
     }
     assert(had_error)
