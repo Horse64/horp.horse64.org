@@ -1,0 +1,206 @@
+# @module version
+# Copyright (c) 2020-2022,  ellie/@ell1e & Horse64 Team (see AUTHORS.md).
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Alternatively, at your option, this file is offered under the Apache 2
+# license, see accompanied LICENSE.md.
+
+
+var ordered_incomplete_hint_words = [
+    "dev", "alpha", "beta", "gamma"
+]
+
+
+func hints_release_candidate(v) {
+    if v.startswith("rc") or (
+            v.has("release") and
+            v.has("candidate")) {
+        return yes
+    }
+    return no
+}
+
+
+func word_denotes_version_to_lesser(v) {
+    if hints_release_candidate(v) {
+        return yes
+    }
+    return ordered_incomplete_hint_words.has(v)
+}
+
+
+func split_at_number_word_switches(v) {
+    var result = []
+    var current_start = 1
+    i = 2
+    while i <= v.len {
+        if (is_num(v.sub(i - 1, i - 1)) and
+                not is_num(v.sub(i, i))) or
+                (not is_num(v.sub(i - 1, i - 1)) and
+                is_num(v.sub(i, i))) {
+            result.add(v.sub(current_start, i - 1))
+            current_start = i
+        }
+        i += 1
+    }
+    result.add(v.sub(current_start))
+    return result
+}
+
+
+func compare_known_words(v1, v2) {
+    if is_num(v1) and is_num(v2) {
+        throw new ValueError("Not words, but numbers.")
+    }
+    if v1 == v2 {
+        return 0
+    }
+
+    # Check single letters:
+    if v1.len == 1 and not is_num(v1) and
+            v2.len == 1 and not is_num(v2) {
+        if (v1 > v2) {
+            return 1
+        }
+        return -1
+    }
+
+    # Check if in known order of alpha/beta/gamma...:
+    if ordered_incomplete_hint_words.has(v1) and
+            ordered_incomplete_hint_words.has(v2) {
+        var result = (ordered_incomplete_hint_words.find(v1) -
+            ordered_incomplete_hint_words.find(v2))
+        if result > 0 {
+            return 1
+        } elseif result < 0 {
+            return -1
+        }
+        return 0
+    }
+
+    # Release candidate should beat dev/alpha/beta/...:
+    if hints_release_candidate(v1) and
+            known_ordered_unfinished.has(v2) {
+        return 1
+    } elseif hints_release_candidate(v2) and
+            known_ordered_unfinished.has(v1) {
+        return -1
+    }
+
+    return 0
+}
+
+
+func compare_version_part(v1, v2) {
+    if is_num(v1) and is_num(v2) {
+        # Do direct number comparison since they're numbers.
+        if v1.to_num() > v2.to_num() {
+            return 1
+        } elseif v1.to_num() < v2.to_num() {
+            return -1
+        }
+        return 0
+    }
+
+    # A number always beats some keyword:
+    if is_num(v1) and not is_num(v2.sub(1, 1)) {
+        return 1
+    } elseif is_num(v2) and not is_num(v1.sub(1, 1)) {
+        return -1
+    }
+
+    # If we're still clueless, try to compare as words:
+    return compare_known_words(v1, v2)
+}
+
+
+func compare_versions(v1, v2) {
+    # Normalize both versions:
+    v1 = v1.trim().lower().replace(" ", "").replace("\t", "")
+    v2 = v2.trim().lower().replace(" ", "").replace("\t", "")
+    for c in {"-", "|", "/", "_"} {
+        v1 = v1.replace(c, ".")
+        v2 = v2.replace(c, ".")
+    }
+    while v1.has("..") {
+        v1 = v1.replace("..", ".")
+    }
+    while v2.has("..") {
+        v2 = v2.replace("..", ".")
+    }
+
+    # Split into parts, then split each part by num/word switch too:
+    var parts1 = v1.split(".")
+    var parts2 = v2.split(".")
+    do {
+        var parts1new = []
+        for part in parts1 {
+            parts1new += split_at_number_word_switches(part)
+        }
+        var parts2new = []
+        for part in parts2 {
+            parts2new += split_at_number_word_switches(part)
+        }
+        parts1 = parts1new
+        parts2 = parts2new
+    }
+
+    # Split into parts and compare by part:
+    i = 1
+    while i <= parts1.len and i <= parts2.len {
+        var result = compare_version_part(
+            parts1[i], parts2[i]
+        )
+        if result > 0 {
+            return 1
+        } elseif result < 0 {
+            return -1
+        }
+        i += 1
+    }
+
+    # If we ended unevenly, handle that as tie breaker:
+    if i > parts1.len {
+        if i > parts2.len {
+            return 0
+        }
+        if is_num(parts2[i]) or
+                not word_denotes_version_to_lesser(
+                parts2[i]) {
+            return -1
+        }
+        return 1
+    } elseif i > parts2.len {
+        assert(i < parts1.len)
+        if is_num(parts1[i]) or
+                not word_denotes_version_to_lesser(
+                parts1[i]) {
+            return 1
+        }
+        return -1
+    }
+
+    # Seems to be pretty much equivalent.
+    return 0
+}
+
