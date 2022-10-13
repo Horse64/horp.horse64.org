@@ -142,6 +142,7 @@ func get_package_ending_space(s) {
             #print([s, i, seen_nonspace_in_last,
             #    seen_path_sep_in_last, seen_dot_in_last])
             var followup_name = guess_first_pkg_name(s.sub(i + 1))
+            var current_name = s.sub(last_start, i - 1)
 
             # See if this looks like a space IN a path name (=continue),
             # or like a space between package names (=abort):
@@ -154,10 +155,13 @@ func get_package_ending_space(s) {
                     package.normalize_package_name(
                         followup_name) == none and
                     not followup_name.has("://") and
-                    not s.sub(last_start, i - 1).has("://") and
-                    not s.sub(last_start, i - 1).endswith("/") and
-                    (system.osname() != "windows" or
-                     not s.sub(last_start, i - 1).endswith("\\")) {
+                    not current_name.has("://") and
+                    not current_name.endswith("/") and
+                    current_name != "." and
+                    current_name != "./" and
+                    (system.osname() != "windows" or (
+                     not s.sub(last_start, i - 1).endswith("\\") and
+                     current_name != "\\")) {
                 # This is likely a resuming whitespace, inside
                 # a path name that continues:
                 seen_nonspace_in_last = no
@@ -367,25 +371,26 @@ func parse_package_refs(refstr) {
                     result.orig_str
                 )
             }
-
-            # Make sure it's an URI in an expected format:
-            if not location.has("://") {
-                var fwslash_pos = location.find("/")
-                var maybe_host_part = none
-                if fwslash_pos != none {
-                    maybe_host_part = location.sub(
-                        1, fwslash_pos - 1
-                    )
-                }
-                if maybe_host_part != none and
-                        maybe_host_part.has(".") and
-                        not maybe_host_part.starts(".") and
-                        not maybe_host_part.has(" ") {
-                    location = "https://" + location
-                } else {
-                    location = uri.from_disk_path(location)
-                }
+        }
+        # Make sure location is an URI in an expected format:
+        if location != none and not location.has("://") {
+            var fwslash_pos = location.find("/")
+            var maybe_host_part = none
+            if fwslash_pos != none {
+                maybe_host_part = location.sub(
+                    1, fwslash_pos - 1
+                )
             }
+            if maybe_host_part != none and
+                    maybe_host_part.has(".") and
+                    not maybe_host_part.starts(".") and
+                    not maybe_host_part.has(" ") {
+                location = "https://" + location
+            } else {
+                location = uri.from_disk_path(location)
+            }
+        }
+        if location != none {
             location = uri.normalize(location)
         }
 

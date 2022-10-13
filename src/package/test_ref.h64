@@ -140,6 +140,10 @@ func test_get_first_package_ending_space {
         "ef/f blub/ def/c file://bla"
     )
     assert(result == 11)
+    result = package.ref.get_package_ending_space(
+        ". blub/ def/c file://bla"
+    )
+    assert(result == 2)
 }
 
 func test_parse_package_refs {
@@ -170,4 +174,11 @@ func test_parse_package_refs {
     assert(result[2].constraints[1][2] == "2.0")
     assert(result[2].constraints[2][1] == "!=")
     assert(result[2].constraints[2][2] == "2.1")
+
+    result = package.ref.parse_package_refs(
+        "core.horse64.org == 1.0 @ /home/my user/Develop/core.horse64.org "
+        "horp.horse64.org > 2.0; != 2.1 ."
+    )
+    assert(result.len == 3)
+    assert(result[3].location == "file://./")
 }
