@@ -83,12 +83,12 @@ func check_constraints_valid(constraints) {
                 constraint_ops_seen.len != 1 or
                 not constraint_ops_seen.has(">")) {
             throw new ValueError(
-                "Constraints may not potentially block latest "
+                "Constraints must not potentially block latest "
                 "release without suggesting a working release. "
                 "Try using an additional '>=' constraint?"
             )
         }
         #for constraint in constraints {
-        #} 
+        #}
     }
 }

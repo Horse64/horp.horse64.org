@@ -50,7 +50,7 @@ func test_extract_first_pkgname_with_constraints {
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0 @ bla")
     assert(result != none)
-    assert(result.package_name == "abc.example.com")
+    assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 1)
     assert(result.constraints[1].op == "==" and
         result.constraints[1].value == "1.0")
@@ -60,28 +60,28 @@ func test_extract_first_pkgname_with_constraints {
         extract_first_pkgname_with_constraints(
         "  mypackagefile.zip != 2")
     assert(result != none)
-    assert(result.package_name == "mypackagefile.zip")
+    assert(result.package_ref == "mypackagefile.zip")
     assert(result.constraints.len == 1)
 
     result = package.ref.
         extract_first_pkgname_with_constraints(
         "./some/folder path/")
     assert(result != none)
-    assert(result.package_name == "./some/folder path/")
+    assert(result.package_ref == "./some/folder path/")
     assert(result.constraints.len == 0)
 
     result = package.ref.
         extract_first_pkgname_with_constraints(
         "./some/folder path/ == 2.0")
     assert(result != none)
-    assert(result.package_name == "./some/folder path/")
+    assert(result.package_ref == "./some/folder path/")
     assert(result.constraints.len == 1)
 
     result = package.ref.
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0; >2.3-beta@ bla")
     assert(result != none)
-    assert(result.package_name == "abc.example.com")
+    assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 2)
     assert(result.constraints[1].op == "==" and
         result.constraints[1].value == "1.0")
@@ -93,7 +93,7 @@ func test_extract_first_pkgname_with_constraints {
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0 ;@ bla")
     assert(result != none)
-    assert(result.package_name == "abc.example.com")
+    assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 1)
     assert(result.constraints[1].op == "==" and
         result.constraints[1].value == "1.0")
@@ -103,7 +103,7 @@ func test_extract_first_pkgname_with_constraints {
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0 ; bla !")
     assert(result != none)
-    assert(result.package_name == "abc.example.com")
+    assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 1)
     assert(result.constraints[1].op == "==" and
         result.constraints[1].value == "1.0")
@@ -183,4 +183,15 @@ func test_parse_package_refs {
     )
     assert(result.len == 3)
     assert(result[3].location == "file://./")
+
+    var had_error = no
+    do {
+        result = package.ref.parse_package_refs(
+            "core.horse64.org < 1.0"
+        )
+    } rescue ValueError as e {
+        had_error = yes
+        assert(e.msg.lower().has("constraint"))
+    }
+    assert(had_error)
 }

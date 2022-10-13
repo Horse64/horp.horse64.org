@@ -83,14 +83,14 @@ func PackageRef.as_str() {
 
 type PackageNameWithConstraints {
     var orig_str
-    var package_name
+    var package_ref
     var constraints
 }
 
 
 func PackageNameWithConstraints.init(
-        pkgname, constraints, orig_str=none) {
-    self.package_name = pkgname
+        pkgname_or_ref, constraints, orig_str=none) {
+    self.package_ref = pkgname_or_ref
     self.constraints = constraints
     self.orig_str = orig_str
 }
@@ -214,27 +214,28 @@ func extract_first_pkgname_with_constraints(s) {
     }
 
     # Extract package name before constraints:
-    var pkgname = none
+    var pkgname_or_ref = none
     if comp_pos != none {
-        pkgname = s.sub(1, comp_pos - 1).trim()
+        pkgname_or_ref = s.sub(1, comp_pos - 1).trim()
     } else {
-        pkgname = s.trim()
+        pkgname_or_ref = s.trim()
     }
-    var space_pos = get_package_ending_space(pkgname)
+    var space_pos = get_package_ending_space(pkgname_or_ref)
     if space_pos != none {
         # Everything past the space might be different packages.
         # Only extract the first one:
         pkgname = pkgname.sub(1, space_pos)
         comp_pos = none
     }
-    if not pkgname.ends(".zip") and
-            not pkgname.has("/") and
-            not pkgname.startswith(".") and
+    if not pkgname_or_ref.ends(".zip") and
+            not pkgname_or_ref.has("/") and
+            not pkgname_or_ref.startswith(".") and
             (system.osname() != "windows" or
-            not pkgname.has("\\")) {
+            not pkgname_or_ref.has("\\")) {
         # Package name is not a path, so validate it:
-        pkgname = package.normalize_package_name(pkgname)
-        if pkgname == none {
+        pkgname_or_ref = package.
+            normalize_package_name(pkgname_or_ref)
+        if pkgname_or_ref == none {
             return none
         }
     }
@@ -242,10 +243,10 @@ func extract_first_pkgname_with_constraints(s) {
         # No constraints at all, so we arrived at the end:
         if space_pos == none {
             return PackageNameWithConstraints(
-                pkgname, [], orig_str=orig_s)
+                pkgname_or_ref, [], orig_str=orig_s)
         } else {
             return new PackageNameWithConstraints(
-                pkgname, [], orig_str=orig_s.sub(1,
+                pkgname_or_ref, [], orig_str=orig_s.sub(1,
                     leading_space_trimmed + space_pos - 1))
         }
     }
@@ -300,8 +301,8 @@ func extract_first_pkgname_with_constraints(s) {
                 entire_parsed_len += 1
             }
             return new PackageNameWithConstraints(
-                pkgname, constraints, orig_str=orig_s.sub(1,
-                    entire_parsed_len))
+                pkgname_or_ref, constraints,
+                orig_str=orig_s.sub(1, entire_parsed_len))
         }
 
         # Advance to next constraint to do another extract loop:
@@ -340,8 +341,8 @@ func parse_package_refs(refstr) {
         assert(result.orig_str != none and result.orig_str.len > 0)
 
         # Now check if there follows an '@', which is not always allowed:
-        package_name = result.package_name
-        location = none
+        var package_name = result.package_ref
+        var location = none
         refstr = refstr.sub(result.orig_str.len + 1).trim()
         if package.normalize_package_name(package_name) == none {
             location = package_name
@@ -396,7 +397,12 @@ func parse_package_refs(refstr) {
         }
 
         # Make sure we're not using some invalid constraint:
-        constraint.check_constraints_valid(result.constraints)
+        do {
+            constraint.check_constraints_valid(result.constraints)
+        } rescue ValueError as e {
+            throw new ValueError("Problem with package '" +
+                result.package_ref.as_str() + "': " + e.msg)
+        }
 
         # Assemble and collect result:
         refs.add(new PackageRef(package_name, result.constraints,
