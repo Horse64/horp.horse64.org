@@ -29,6 +29,7 @@
 import system from core.horse64.org
 import uri from core.horse64.org
 
+import constraint
 import package
 
 
@@ -280,9 +281,9 @@ func extract_first_pkgname_with_constraints(s) {
                 s[past_constraint_pos] == " " {
             past_constraint_pos += 1
         }
-        var constraint = none
         if constraint_arg.len > 0 {
-            constraints.add([constraint_op, constraint_arg])
+            constraints.add(new constraint.Constraint(
+                constraint_op, constraint_arg))
         }
 
         # See whether a constraint follows:
@@ -394,9 +395,27 @@ func parse_package_refs(refstr) {
             location = uri.normalize(location)
         }
 
+        # Make sure we're not using some invalid constraint:
+        constraint.check_constraints_valid(result.constraints)
+
         # Assemble and collect result:
         refs.add(new PackageRef(package_name, result.constraints,
             location))
     }
     return refs
+}
+
+
+func add_location_to_package_refs(refs, callback) {
+    for ref in refs {
+        if ref.location != none or
+                ref.package_name == none {
+            continue
+        }
+        get_servermeta_info_by_package_name(
+            ref.package_name
+        ) then err, metainfo:
+
+        print("test")
+    }
 }
