@@ -27,6 +27,7 @@
 
 
 import system from core.horse64.org
+import uri from core.horse64.org
 
 import package
 
@@ -37,10 +38,45 @@ const version_comp_tokens = {
 
 
 type PackageRef {
-    var orig_str
     var package_name
     var constraints
-    var source_uri
+    var location
+}
+
+
+func PackageRef.init(pkgname, constraints, location) {
+    if pkgname != none and pkgname.has("/") {
+        throw new ValueError("Invalid package name: " + pkgname)
+    }
+    if location != none and not location.has("://") {
+        throw new ValueError("Invalid location: " + location)
+    }
+    if location == none and pkgname == none {
+        throw new ValueError("Must have either package "
+            "name or location.")
+    }
+    self.location = location
+    self.package_name = pkgname
+    self.constraints = constraints
+}
+
+
+func PackageRef.as_str() {
+    var t = "PackageRef("
+    if self.package_name != none {
+        t += "package_name='" +
+            self.package_name + "'"
+    }
+    if self.location != none {
+        if not t.endswith("(") {
+            t += ","
+        }
+        t += "location='" +
+            self.location + "'"
+    }
+    t += ",constraints=" +
+        self.constraints.as_str()
+    return t + ")"
 }
 
 
@@ -73,6 +109,85 @@ func get_first_comparable_pos(s) {
 }
 
 
+func get_package_ending_space(s) {
+    if typename(s) != "str" {
+        return none
+    }
+
+    # A helper function to get the first maybe-package-name in a string:
+    func guess_first_pkg_name(s) {
+        var hadnonspace = no
+        i = 2
+        while i <= s.len {
+            if s[i] == " " and not hadnonspace {
+                i += 1
+                continue
+            }
+            hadnonspace = yes
+            if {" ", "@", ";", "!", "=", ">", "<"}.has(s[i]) {
+                return s.sub(1, i - 1)
+            }
+            i += 1
+        }
+        return s
+    }
+
+    var last_start = 1
+    var seen_nonspace_in_last = no
+    var seen_dot_in_last = no
+    var seen_path_sep_in_last = no
+    i = 1
+    while i <= s.len {
+        if s[i] == " " {  # See if we must stop here!
+            #print([s, i, seen_nonspace_in_last,
+            #    seen_path_sep_in_last, seen_dot_in_last])
+            var followup_name = guess_first_pkg_name(s.sub(i + 1))
+
+            # See if this looks like a space IN a path name (=continue),
+            # or like a space between package names (=abort):
+            if (not seen_nonspace_in_last or
+                    seen_path_sep_in_last or
+                    not seen_dot_in_last or
+                    package.normalize_package_name(
+                    s.sub(last_start, i - 1)) == none) and
+                    # ... exclusion cases where it's clearly not resuming:
+                    package.normalize_package_name(
+                        followup_name) == none and
+                    not followup_name.has("://") and
+                    not s.sub(last_start, i - 1).has("://") and
+                    not s.sub(last_start, i - 1).endswith("/") and
+                    (system.osname() != "windows" or
+                     not s.sub(last_start, i - 1).endswith("\\")) {
+                # This is likely a resuming whitespace, inside
+                # a path name that continues:
+                seen_nonspace_in_last = no
+                seen_dot_in_last = no
+                seen_path_sep_in_last = no
+                last_start = i + 1
+                i += 1
+                continue
+            }
+            # If we reach this, it's a separating whitespace.
+            return i
+        }
+        # Track a few things:
+        if s[i] != " " {
+            seen_nonspace_in_last = yes
+            if s[i] == "." {
+                seen_dot_in_last = yes
+            }
+            if s[i] == "/" or (
+                    system.osname() == "windows" and
+                    s[i] == "\\") {
+                seen_path_sep_in_last = yes
+            }
+        }
+        i += 1
+    }
+    return none
+}
+
+
 func extract_first_pkgname_with_constraints(s) {
     # Prepare string to be in required format:
     if typename(s) != "str" {
@@ -86,6 +201,13 @@ func extract_first_pkgname_with_constraints(s) {
     # See where the first constraint starts, if any:
     var comp_pos = get_first_comparable_pos(s)
 
+    # Some obvious bail out cases:
+    if s.startswith("@") or comp_pos == 1 or
+            s.startswith("=") or
+            s.startswith(";") {
+        return none
+    }
+
     # Extract package name before constraints:
     var pkgname = none
     if comp_pos != none {
@@ -93,16 +215,23 @@ func extract_first_pkgname_with_constraints(s) {
     } else {
         pkgname = s.trim()
     }
-    var space_pos = pkgname.find(" ")
+    var space_pos = get_package_ending_space(pkgname)
     if space_pos != none {
         # Everything past the space might be different packages.
         # Only extract the first one:
         pkgname = pkgname.sub(1, space_pos)
         comp_pos = none
     }
-    pkgname = package.normalize_package_name(pkgname)
-    if pkgname == none {
-        return none
+    if not pkgname.ends(".zip") and
+            not pkgname.has("/") and
+            not pkgname.startswith(".") and
+            (system.osname() != "windows" or
+            not pkgname.has("\\")) {
+        # Package name is not a path, so validate it:
+        pkgname = package.normalize_package_name(pkgname)
+        if pkgname == none {
+            return none
+        }
     }
     if comp_pos == none {
         # No constraints at all, so we arrived at the end:
@@ -181,8 +310,88 @@ func extract_first_pkgname_with_constraints(s) {
 }
 
 
-func parse_package_ref(ref) {
-    if typename(ref) != str {
+func parse_package_refs(refstr) {
+    if typename(refstr) != "str" {
         return none
     }
+
+    var refs = []
+
+    refstr = refstr.trim()
+    while refstr.len > 0 {
+        # Extract the next package name/folder name with constraints:
+        result = extract_first_pkgname_with_constraints(refstr)
+        if result == none {
+            var range_end = math.min(20, math.max(0, refstr.len - 2))
+            var dotdotdot = ""
+            if range_end < refstr.len {
+                dotdotdot = "..."
+            }
+            throw new ValueError(
+                "Failed to parse package ref starting with: " +
+                refstr.sub(1, range_end) + dotdotdot
+            )
+        }
+        assert(result.orig_str != none and result.orig_str.len > 0)
+
+        # Now check if there follows an '@', which is not always allowed:
+        package_name = result.package_name
+        location = none
+        refstr = refstr.sub(result.orig_str.len + 1).trim()
+        if package.normalize_package_name(package_name) == none {
+            location = package_name
+            package_name = none
+            if refstr.startswith("@") {
+                throw new ValueError(
+                    "Encountered invalid location '@', can't have "
+                    "a location for any URI or folder package ref. "
+                    "It occurs after: " + result.orig_str
+                )
+            }
+        }
+        if refstr.startswith("@") {
+            # Extract location URI specified after '@':
+            refstr = refstr.sub(2).trim()
+            var pos = get_package_ending_space(refstr)
+            location = refstr
+            if pos != none {
+                location = location.sub(1, pos - 1).trim()
+                refstr = refstr.sub(pos)
+            }
+
+            # It can't be something super invalid:
+            if location == "" or {";", "?", "!"}.has(location) {
+                throw new ValueError(
+                    "Encountered invalid location after '@', "
+                    "specified after this package ref: " +
+                    result.orig_str
+                )
+            }
+
+            # Make sure it's an URI in an expected format:
+            if not location.has("://") {
+                var fwslash_pos = location.find("/")
+                var maybe_host_part = none
+                if fwslash_pos != none {
+                    maybe_host_part = location.sub(
+                        1, fwslash_pos - 1
+                    )
+                }
+                if maybe_host_part != none and
+                        maybe_host_part.has(".") and
+                        not maybe_host_part.starts(".") and
+                        not maybe_host_part.has(" ") {
+                    location = "https://" + location
+                } else {
+                    location = uri.from_disk_path(location)
+                }
+            }
+            location = uri.normalize(location)
+        }
+
+        # Assemble and collect result:
+        refs.add(new PackageRef(package_name, result.constraints,
+            location))
+    }
+    return refs
 }

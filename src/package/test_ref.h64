@@ -43,7 +43,9 @@ func test_get_first_comparable_pos {
 
 
 func test_extract_first_pkgname_with_constraints {
-    var result = package.ref.
+    var result
+
+    result = package.ref.
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0 @ bla")
     assert(result != none)
@@ -53,7 +55,28 @@ func test_extract_first_pkgname_with_constraints {
         result.constraints[1][2] == "1.0")
     assert(result.orig_str == "  abc.example.com == 1.0 ")
 
-    var result = package.ref.
+    result = package.ref.
+        extract_first_pkgname_with_constraints(
+        "  mypackagefile.zip != 2")
+    assert(result != none)
+    assert(result.package_name == "mypackagefile.zip")
+    assert(result.constraints.len == 1)
+
+    result = package.ref.
+        extract_first_pkgname_with_constraints(
+        "./some/folder path/")
+    assert(result != none)
+    assert(result.package_name == "./some/folder path/")
+    assert(result.constraints.len == 0)
+
+    result = package.ref.
+        extract_first_pkgname_with_constraints(
+        "./some/folder path/ == 2.0")
+    assert(result != none)
+    assert(result.package_name == "./some/folder path/")
+    assert(result.constraints.len == 1)
+
+    result = package.ref.
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0; >2.3-beta@ bla")
     assert(result != none)
@@ -65,7 +88,7 @@ func test_extract_first_pkgname_with_constraints {
         result.constraints[2][2] == "2.3-beta")
     assert(result.orig_str == "  abc.example.com == 1.0; >2.3-beta")
 
-    var result = package.ref.
+    result = package.ref.
         extract_first_pkgname_with_constraints(
         "  abc.example.com == 1.0 ;@ bla")
     assert(result != none)
@@ -87,6 +110,64 @@ func test_extract_first_pkgname_with_constraints {
 }
 
 
-func test_parse_package_ref {
+func test_get_first_package_ending_space {
+    var result
+    result = package.ref.get_package_ending_space(
+        "abc def/"
+    )
+    assert(result == none)
+    result = package.ref.get_package_ending_space(
+        "bla.abc.org def/"
+    )
+    assert(result == 12)
+    result = package.ref.get_package_ending_space(
+        "bla.abc.org/e def"
+    )
+    assert(result == none)
+    result = package.ref.get_package_ending_space(
+        "bla.abc.org/e def.pkg.org@"
+    )
+    assert(result == 14)
+    result = package.ref.get_package_ending_space(
+        "https://example.com def/"
+    )
+    assert(result == 20)
+    result = package.ref.get_package_ending_space(
+        "ef/f blub/g def/c file://bla"
+    )
+    assert(result == 18)
+    result = package.ref.get_package_ending_space(
+        "ef/f blub/ def/c file://bla"
+    )
+    assert(result == 11)
+}
 
+func test_parse_package_refs {
+    var result
+    result = package.ref.parse_package_refs(
+        "core.horse64.org"
+    )
+    assert(result.len == 1)
+    assert(result[1].package_name == "core.horse64.org")
+    assert(result[1].location == none)
+    assert(result[1].constraints.len == 0)
+
+    result = package.ref.parse_package_refs(
+        "core.horse64.org == 1.0 @ /home/my user/Develop/core.horse64.org "
+        "horp.horse64.org > 2.0; != 2.1"
+    )
+    assert(result.len == 2)
+    assert(result[1].package_name == "core.horse64.org")
+    assert(result[1].location ==
+           "file:///home/my%20user/Develop/core.horse64.org")
+    assert(result[1].constraints.len == 1)
+    assert(result[1].constraints[1][1] == "==")
+    assert(result[1].constraints[1][2] == "1.0")
+    assert(result[2].package_name == "horp.horse64.org")
+    assert(result[2].location == none)
+    assert(result[2].constraints.len == 2)
+    assert(result[2].constraints[1][1] == ">")
+    assert(result[2].constraints[1][2] == "2.0")
+    assert(result[2].constraints[2][1] == "!=")
+    assert(result[2].constraints[2][2] == "2.1")
 }
