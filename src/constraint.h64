@@ -26,6 +26,9 @@
 # license, see accompanied LICENSE.md.
 
 
+import version
+
+
 type Constraint {
     var op
     var value
@@ -49,46 +52,155 @@ func Constraint.allows_version(version) {
 }
 
 
-func guess_version_from_constraints(constraints) {
+func Constraint.conflicts(other_constraint) {
+    if self.op == "==" {
+        if other_constraint.op == "!=" {
+            var result = (version.compare_versions(
+                self.value, other_constraint.value))
+            if result == 0 {
+                return yes
+            }
+        }
+    }
+}
+
+
+func guess_versions_from_constraints_naively(constraints) {
     # Try various constraint types, starting with most preferred:
 
+    var guesses = []
     for constraint in constraints {  # This leaves no options anyway!
         if constraint.op == "==" {
-            return constraint.op
+            return [constraint.op]
         }
     }
     for constraint in constraints {  # We get the newest we can.
         if constraint.op == "<=" {
-            return constraint.op
+            guesses.add(constraint.op)
         }
     }
     for constraint in constraints {  # This might be an old one.
         if constraint.op == ">=" {
-            return constraint.op
+            guesses.add(constraint.op)
         }
     }
-    return none
+    return guesses
 }
 
 
-func check_constraints_valid(constraints) {
+func verify_constraints_for_versions(constraints) {
+    if constraints.len < 0 {
+        return yes
+    }
+
+    # Collect what type of constraint ops we even use:
     constraint_ops_seen = {}
     for constraint in constraints {
         constraint_ops_seen.add(constraint.op)
     }
 
-    if constraints.len > 0 {
-        var version = guess_version_from_constraints(constraints)
-        if version == none and (
-                constraint_ops_seen.len != 1 or
-                not constraint_ops_seen.has(">")) {
+    # Unless all constraints are just '>', they must imply
+    # a version for us to pick. (The main reason is horp can't
+    # list all versions of a remote, it can just access a known
+    # version or the latest one. So if constraints might block
+    # the latest, they need to imply an alternative for us.)
+    var versions = guess_versions_from_constraints_naively(
+        constraints
+    )
+    if versions == none {
+        if constraint_ops_seen.len != 1 or
+                not constraint_ops_seen.has(">") {
             throw new ValueError(
                 "Constraints must not potentially block latest "
                 "release without suggesting a working release. "
                 "Try using an additional '>=' constraint?"
             )
+        } else {
+            return yes  # Nothing more to check.
         }
-        #for constraint in constraints {
-        #}
     }
+
+    # Check if some constraints are messing up our version guess too badly:
+    var unblocked_versions = versions.copy()
+    var removed_version = yes
+    while unblocked_versions.len > 0 and removed_version {
+        removed_version = no
+        var version_1 = unblocked_versions[1]
+        for constraint in constraints {
+            if constraint.op == "<" {
+                var result = (version.compare_versions(
+                    constraint.value, version_1))
+                if result <= 0 and unblocked_versions.len == 1 {
+                    throw new ValueError(
+                        "Got constraint implying version '" +
+                        version_1 + "' works, but another one implying "
+                        "only versions older than the seemingly " +
+                        if result == 0 ("equivalent") else
+                            ("older") + " version '" +
+                        constraint.value + "' works. There is no other "
+                        "version safe to try, this is not allowed.")
+                } else {
+                    removed_version = yes
+                    unblocked_versions.del(version_1)
+                }
+            } elseif constraint.op == "!=" {
+                var result = (version.compare_versions(
+                    constraint.value, version_1))
+                if result == 0 and unblocked_versions.len == 1 {
+                    throw new ValueError(
+                        "Got constraint implying version '" +
+                        version_1 + "' works, but another one banning "
+                        "the seemingly equivalent version '" +
+                        constraint.value + "'. There is no other "
+                        "version safe to try, this is not allowed.")
+                } else {
+                    removed_version = yes
+                    unblocked_versions.del(version_1)
+                }
+            } elseif constraint.op == ">" {
+                var result = (version.compare_versions(
+                    constraint.value, version_1))
+                if result >= 0 and unblocked_versions.len == 1 {
+                    throw new ValueError(
+                        "Got constraint implying version '" +
+                        version_1 + "' works, but another one implying "
+                        "only versions newer than the seemingly " +
+                        if result == 0 ("equivalent") else
+                            ("newer") + " version '" +
+                        constraint.value + "' work. This is not "
+                        "allowed.")
+                } else {
+                    removed_version = yes
+                    unblocked_versions.del(version_1)
+                }
+            }
+        }
+    }
+
+    # Return all the versions we still have left, but sorted:
+    var versions_sorted = []
+    for v in unblocked_versions {
+        if versions_sorted.len == 0 {
+            versions_sorted.add(v)
+            continue
+        }
+        var inserted = no
+        var i = 1
+        while i <= versions_sorted.len {
+            var result = version_sorted[i].compare_versions(
+                v, versions_sorted[i]
+            )
+            if result < 0 or (result == 0 and
+                    v < version_sorted[i]) {
+                inserted = yes
+                versions_sorted.insert(i, v)
+            }
+            i += 1
+        }
+        if not inserted {
+            versions_sorted.add(v)
+        }
+    }
+    return versions_sorted
 }
+

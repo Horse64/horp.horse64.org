@@ -398,7 +398,9 @@ func parse_package_refs(refstr) {
 
         # Make sure we're not using some invalid constraint:
         do {
-            constraint.check_constraints_valid(result.constraints)
+            constraint.verify_constraints_for_versions(
+                result.constraints
+            )
         } rescue ValueError as e {
             throw new ValueError("Problem with package '" +
                 result.package_ref.as_str() + "': " + e.msg)
