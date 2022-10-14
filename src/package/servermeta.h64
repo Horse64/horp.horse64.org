@@ -37,14 +37,11 @@ import package
 ## internet addresses which can be tested for serving
 ## the server meta ini config (which has the package's
 ## authoritative repository location).
-#
+##
 ## @param package_name str The name of the package.
-## @param callback func A callback with arguments `err, hosts`
-##   where err will be a @{ValueError} or networking
-##   error on failure or otherwise @{none}, and `hosts` will
-##   be a @{list} of @{strings|str} on success.
+## @returns a @{list} of @{hostname strings|str}
 func get_possible_package_hosts(
-        package_name, callback, verbose=no
+        package_name, verbose=no
         ) {
     # Assemble host name candidates:
     var host_candidates = [package_name]
@@ -68,18 +65,20 @@ func get_possible_package_hosts(
             "will now look up these hosts: " +
             host_candidates.as_str())
     }
-    net.lookup_name(
+    var ips = net.lookup_name(
         host_candidates, retries=3, retry_delay=0.5
-    ) then err, ips:
+    ) later:
 
     # If we got an error that is alike a networking
-    # failure (rather than NXDOMAIN), return general failure:
-    if err != none {
+    # failure (rather than NXDOMAIN), bail out fully:
+    do {
+        await ips
+    } rescue NetworkIOError as e {
         if verbose {
             print("horp: debug: get_possible_package_hosts(): "
                 "resolver failure")
         }
-        return callback(err, none)
+        throw e
     }
 
     # Otherwise, return the domains for which we got an address:
@@ -94,11 +93,10 @@ func get_possible_package_hosts(
             print("horp: debug: get_possible_package_hosts(): "
                 "lookups complete, some successful")
         }
-        return callback(none, result)
+        return result
     }
-    var resulterr = new ValueError("No associated "
+    throw new ValueError("No associated "
         "hostname found.")
-    return callback(resulterr, none)
 }
 
 
@@ -162,16 +160,15 @@ func ServerMetaInfo.update_from_config(values, from_uri=none) {
 }
 
 
-func get_servermeta_info_by_package_name(
-        package_name, callback, verbose=no
+func get_servermeta_info_by_package_name (
+        package_name, verbose=no
         ) {
-    get_possible_package_hosts(
+    var hosts = get_possible_package_hosts(
         package_name, verbose=verbose,
-    ) then err, hosts:
+    ) later:
 
-    if err != none {
-        return callback(err, none, none)
-    }
+    await hosts
+
     var query_uris = []
     for host in hosts {
         query_uris.add(host_to_package_uri(host))
@@ -183,66 +180,77 @@ func get_servermeta_info_by_package_name(
     }
     query_uris.reverse()
 
-    func try_next_uri {
-        var next_uri = query_uris.pop()
+    var nonfailed_uri_count = query_uris.len
+    var next_uri = query_uris.pop()
+    var result_str = net.fetch.get_str(
+        next_uri, max_size=(2 * 1024)
+    ) later:
 
+    var had_error = none
+    do {
+        await query_uri, result_str
+    } rescue Error as e {
+        nonfailed_uri_count -= 1
+        had_error = e
+    }
+
+    if verbose {
+        print("horp: debug: get_package_servermeta_ini(): "
+            "processing URI result: " +
+            next_uri)
+    }
+
+    if had_error != none or nonfailed_uri_count == 0 {
+        if query_uris.len == 0 {
+            # None left to try. Just spit out the error:
+            if verbose {
+                print("horp: debug: "
+                    "get_package_servermeta_ini(): "
+                    "all candidates failed, returning error")
+            }
+            if had_error == none {
+                had_error =
+                    new net.NetworkIOError("Got an empty response.")
+            }
+            throw had_error
+        }
+        # Call net.fetch.get_str again.
+        next_uri = query_uris.pop()
+        result_str = net.fetch.get_str(
+            next_uri, max_size=(2 * 1024)
+        ) later repeat
+    }
+    if verbose {
+        print("horp: debug: "
+            "get_package_servermeta_ini(): "
+            "success fetching URI: " + next_uri)
+    }
+
+    assert(result_str != none)
+    var result = new ServerMetaInfo()
+    do {
+        var values = confparse.parse_conf_str(result_str)
+    } rescue confparse.ConfParseError as e {
         if verbose {
-            print("horp: debug: get_package_servermeta_ini(): "
-                "trying next URI: " +
+            print("horp: verbose: "
+                "get_package_servermeta_ini(): "
+                "oops, .ini at this URI is malformed: " +
                 next_uri)
         }
-        net.fetch.get_str(next_uri, max_size=(2 * 1024))
-        then err, result_str:
-
-        if err != none or result_str.len == 0 {
-            if query_uris.len == 0 {
-                # None left to try. Just spit out the error:
-                if verbose {
-                    print("horp: debug: "
-                        "get_package_servermeta_ini(): "
-                        "all candidates failed, returning error")
-                }
-                if err == none {
-                    err = new net.NetworkIOError("Got an empty response.")
-                }
-                return callback(err, none)
-            }
-            return try_next_uri()
-        }
-        if verbose {
-            print("horp: debug: "
-                "get_package_servermeta_ini(): "
-                "success fetching URI: " + next_uri)
-        }
-
-        assert(result_str != none)
-        var result = new ServerMetaInfo()
-        do {
-            var values = confparse.parse_conf_str(result_str)
-            if values.len == 0 {
-                print("horp: verbose: "
-                    "get_package_servermeta_ini(): "
-                    "oops, .ini at this URI has no sections: " +
-                    next_uri)
-                return callback(new confparse.ConfParseError(
-                    "Config file has no sections."
-                ))
-            }
-            result.update_from_config(
-                confparse.parse_conf_str(result_str),
-                from_uri=next_uri
-            )
-        } rescue confparse.ConfParseError as e {
-            if verbose {
-                print("horp: verbose: "
-                    "get_package_servermeta_ini(): "
-                    "oops, .ini at this URI is malformed: " +
-                    next_uri)
-            }
-            return callback(e, none)
-        }
-        return callback(none, result)
+        throw e
     }
-    try_next_uri()
+    if values.len == 0 {
+        print("horp: verbose: "
+            "get_package_servermeta_ini(): "
+            "oops, .ini at this URI has no sections: " +
+            next_uri)
+        throw new confparse.ConfParseError(
+            "Config file has no sections."
+        )
+    }
+    result.update_from_config(
+        values, from_uri=next_uri
+    )
+    return result
 }
 

@@ -414,15 +414,17 @@ func parse_package_refs(refstr) {
 }
 
 
-func add_location_to_package_refs(refs, callback) {
+func add_location_to_package_refs(refs) {
     for ref in refs {
         if ref.location != none or
                 ref.package_name == none {
             continue
         }
-        get_servermeta_info_by_package_name(
+        var metainfo = get_servermeta_info_by_package_name(
             ref.package_name
-        ) then err, metainfo:
+        ) later:
+
+        await metainfo
 
         print("test")
     }

@@ -43,9 +43,9 @@ func test_verify_constraints_for_versions {
     }
     assert(had_error)
 
-    #assert(constraint.verify_constraints_for_versions(
-    #    [Constraint("==", "1.0")]
-    #) == ["1.0"])
+    assert(constraint.verify_constraints_for_versions(
+        [constraint.Constraint("==", "1.0")]
+    ) == ["1.0"])
     #assert(constraint.verify_constraints_for_versions(
     #    [Constraint(">=", "1.0"), Constraint(">=", "1.1")]
     #) == ["1.1", "1.0"])

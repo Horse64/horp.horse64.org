@@ -59,11 +59,13 @@ func actionparser_add(args, verbose=no) {
             result.args["target name"])
         return 1
     }
-    package.servermeta.get_servermeta_info_by_package_name(
+    var info = package.servermeta.get_servermeta_info_by_package_name(
         package_name, verbose=verbose
-    ) then err, info:
+    ) later:
 
-    if err != none {
+    do {
+        await info
+    } rescue Error as err {
         print("horp: error: Failed to get server meta horp.ini: " +
             err.msg)
         print("Did you target an existing horp package?")
@@ -89,8 +91,10 @@ func main {
         return result.exit_code
     }
     if result.args["action"] == "add" {
-        return actionparser_add(result.args["action args"],
-            verbose=result.args["--verbose"])
+        var return_code = actionparser_add(
+            result.args["action args"],
+            verbose=result.args["--verbose"]) later:
+        return return_code
     } else {
         print("horp: error: Unknown action: " + result.args["action"])
         print("Use horp --help to show usage.")

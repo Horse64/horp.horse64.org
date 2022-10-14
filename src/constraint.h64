@@ -71,17 +71,17 @@ func guess_versions_from_constraints_naively(constraints) {
     var guesses = []
     for constraint in constraints {  # This leaves no options anyway!
         if constraint.op == "==" {
-            return [constraint.op]
+            return [constraint.value]
         }
     }
     for constraint in constraints {  # We get the newest we can.
         if constraint.op == "<=" {
-            guesses.add(constraint.op)
+            guesses.add(constraint.value)
         }
     }
     for constraint in constraints {  # This might be an old one.
         if constraint.op == ">=" {
-            guesses.add(constraint.op)
+            guesses.add(constraint.value)
         }
     }
     return guesses
