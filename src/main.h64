@@ -65,7 +65,7 @@ func actionparser_add(args, verbose=no) {
 
     do {
         await info
-    } rescue Error as err {
+    } rescue any as err {
         print("horp: error: Failed to get server meta horp.ini: " +
             err.msg)
         print("Did you target an existing horp package?")

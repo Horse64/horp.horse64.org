@@ -183,13 +183,14 @@ func get_servermeta_info_by_package_name (
     var nonfailed_uri_count = query_uris.len
     var next_uri = query_uris.pop()
     var result_str = net.fetch.get_str(
-        next_uri, max_size=(2 * 1024)
+        next_uri, max_size=(2 * 1024),
+        one_or_more=yes
     ) later:
 
     var had_error = none
     do {
         await query_uri, result_str
-    } rescue Error as e {
+    } rescue any as e {
         nonfailed_uri_count -= 1
         had_error = e
     }
