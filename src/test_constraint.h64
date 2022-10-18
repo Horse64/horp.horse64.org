@@ -34,7 +34,8 @@ func test_verify_constraints_for_versions {
     had_error = no
     do {
         constraint.verify_constraints_for_versions(
-            [constraint.Constraint("<", "1.0")]
+            [constraint.Constraint(
+             constraint.C_LESSER, "1.0")]
         )
     } rescue ValueError as e {
         had_error = yes
@@ -44,13 +45,16 @@ func test_verify_constraints_for_versions {
     assert(had_error)
 
     assert(constraint.verify_constraints_for_versions(
-        [constraint.Constraint("==", "1.0")]
+        [constraint.Constraint(
+         constraint.C_EQUAL, "1.0")]
     ) == ["1.0"])
     #assert(constraint.verify_constraints_for_versions(
-    #    [Constraint(">=", "1.0"), Constraint(">=", "1.1")]
+    #    [Constraint(constraint.C_GREATEREQUAL, "1.0"),
+    #     Constraint(constraint.C_GREATEREQUAL, "1.1")]
     #) == ["1.1", "1.0"])
     #assert(constraint.verify_constraints_for_versions(
-    #    [Constraint(">=", "1.1"), Constraint(">=", "1.0")]
+    #    [Constraint(constraint.C_GREATEREQUAL, "1.1"),
+    #     Constraint(constraint.C_GREATEREQUAL, "1.0")]
     #) == ["1.1", "1.0"])
 }
 

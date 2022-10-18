@@ -29,64 +29,90 @@
 import version
 
 
+enum ConstraintOp {
+    C_GREATER
+    C_GREATEREQUAL
+    C_EQUAL
+    C_NOTEQUAL
+    C_LESSEREQUAL
+    C_LESSER
+}
+
 type Constraint {
     var op
     var value
 }
 
-
 func Constraint.init(op, value) {
-    self.op = op + ""
+    if typename(op) != "num" {
+        throw new TypeError("op parameter must be "
+            "ConstraintOp enum value")
+    }
+    self.op = op
     self.value = value + ""
 }
-
 
 func Constraint.as_str() {
     return "Constraint(op='" + self.op +
         "', value='" + self.value + "')"
 }
 
-
 func Constraint.allows_version(version) {
     return yes
 }
 
-
 func Constraint.conflicts(other_constraint) {
-    if self.op == "==" {
-        if other_constraint.op == "!=" {
+    if self.op == C_EQUAL {
+        if other_constraint.op == C_NOTEQUAL {
             var result = (version.compare_versions(
                 self.value, other_constraint.value))
             if result == 0 {
                 return yes
             }
+            return no
         }
     }
+    return no
 }
 
+func op_from_str(s) {
+    if s == ">" {
+        return C_GREATER
+    } elseif s == ">=" {
+        return C_GREATEREQUAL
+    } elseif s == "==" {
+        return C_EQUAL
+    } elseif s == "!=" {
+        return C_NOTEQUAL
+    } elseif s == "<=" {
+        return C_LESSEREQUAL
+    } elseif s == "<" {
+        return C_LESSER
+    }
+    return none
+}
 
 func guess_versions_from_constraints_naively(constraints) {
     # Try various constraint types, starting with most preferred:
 
     var guesses = []
     for constraint in constraints {  # This leaves no options anyway!
-        if constraint.op == "==" {
+        if constraint.op == C_EQUAL {
             return [constraint.value]
         }
     }
     for constraint in constraints {  # We get the newest we can.
-        if constraint.op == "<=" {
+        if constraint.op == C_LESSEREQUAL {
             guesses.add(constraint.value)
         }
     }
     for constraint in constraints {  # This might be an old one.
-        if constraint.op == ">=" {
+        if constraint.op == C_GREATEREQUAL {
             guesses.add(constraint.value)
         }
     }
     return guesses
 }
-
 
 func verify_constraints_for_versions(constraints) {
     if constraints.len <= 0 {
@@ -110,7 +136,7 @@ func verify_constraints_for_versions(constraints) {
     if versions.len == 0 {
         if constraint_ops_seen.len > 1 or (
                 constraint_ops_seen.len == 1 and
-                not constraint_ops_seen.has(">")) {
+                not constraint_ops_seen.has(C_GREATER)) {
             throw new ValueError(
                 "Constraints must not potentially block latest "
                 "version without suggesting a working version. "
@@ -128,7 +154,7 @@ func verify_constraints_for_versions(constraints) {
         removed_version = no
         var version_1 = unblocked_versions[1]
         for constraint in constraints {
-            if constraint.op == "<" {
+            if constraint.op == C_LESSER {
                 var result = (version.compare_versions(
                     constraint.value, version_1))
                 if result <= 0 and unblocked_versions.len == 1 {
@@ -144,7 +170,7 @@ func verify_constraints_for_versions(constraints) {
                     removed_version = yes
                     unblocked_versions.del(version_1)
                 }
-            } elseif constraint.op == "!=" {
+            } elseif constraint.op == C_NOTEQUAL {
                 var result = (version.compare_versions(
                     constraint.value, version_1))
                 if result == 0 and unblocked_versions.len == 1 {
@@ -158,7 +184,7 @@ func verify_constraints_for_versions(constraints) {
                     removed_version = yes
                     unblocked_versions.del(version_1)
                 }
-            } elseif constraint.op == ">" {
+            } elseif constraint.op == C_GREATER {
                 var result = (version.compare_versions(
                     constraint.value, version_1))
                 if result >= 0 and unblocked_versions.len == 1 {

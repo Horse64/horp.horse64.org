@@ -27,6 +27,7 @@
 
 import system from core.horse64.org
 
+import constraint
 import package.ref
 
 
@@ -42,7 +43,6 @@ func test_get_first_comparable_pos {
     assert(pos == 7)
 }
 
-
 func test_extract_first_pkgname_with_constraints {
     var result
 
@@ -52,7 +52,7 @@ func test_extract_first_pkgname_with_constraints {
     assert(result != none)
     assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 1)
-    assert(result.constraints[1].op == "==" and
+    assert(result.constraints[1].op == constraint.C_EQUAL and
         result.constraints[1].value == "1.0")
     assert(result.orig_str == "  abc.example.com == 1.0 ")
 
@@ -83,9 +83,9 @@ func test_extract_first_pkgname_with_constraints {
     assert(result != none)
     assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 2)
-    assert(result.constraints[1].op == "==" and
+    assert(result.constraints[1].op == constraint.C_EQUAL and
         result.constraints[1].value == "1.0")
-    assert(result.constraints[2].op == ">" and
+    assert(result.constraints[2].op == constraint.C_GREATER and
         result.constraints[2].value == "2.3-beta")
     assert(result.orig_str == "  abc.example.com == 1.0; >2.3-beta")
 
@@ -95,7 +95,7 @@ func test_extract_first_pkgname_with_constraints {
     assert(result != none)
     assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 1)
-    assert(result.constraints[1].op == "==" and
+    assert(result.constraints[1].op == constraint.C_EQUAL and
         result.constraints[1].value == "1.0")
     assert(result.orig_str == "  abc.example.com == 1.0 ;")
 
@@ -105,11 +105,10 @@ func test_extract_first_pkgname_with_constraints {
     assert(result != none)
     assert(result.package_ref == "abc.example.com")
     assert(result.constraints.len == 1)
-    assert(result.constraints[1].op == "==" and
+    assert(result.constraints[1].op == constraint.C_EQUAL and
         result.constraints[1].value == "1.0")
     assert(result.orig_str == "  abc.example.com == 1.0 ;")
 }
-
 
 func test_get_first_package_ending_space {
     var result
@@ -147,7 +146,6 @@ func test_get_first_package_ending_space {
     assert(result == 2)
 }
 
-
 func test_parse_package_refs {
     var result
     result = package.ref.parse_package_refs(
@@ -167,14 +165,14 @@ func test_parse_package_refs {
     assert(result[1].location ==
            "file:///home/my%20user/Develop/core.horse64.org")
     assert(result[1].constraints.len == 1)
-    assert(result[1].constraints[1].op == "==")
+    assert(result[1].constraints[1].op == constraint.C_EQUAL)
     assert(result[1].constraints[1].value == "1.0")
     assert(result[2].package_name == "horp.horse64.org")
     assert(result[2].location == none)
     assert(result[2].constraints.len == 2)
-    assert(result[2].constraints[1].op == ">=")
+    assert(result[2].constraints[1].op == constraint.C_GREATEREQUAL)
     assert(result[2].constraints[1].value == "2.0")
-    assert(result[2].constraints[2].op == "!=")
+    assert(result[2].constraints[2].op == constraint.C_NOTEQUAL)
     assert(result[2].constraints[2].value == "2.1")
 
     result = package.ref.parse_package_refs(
@@ -196,3 +194,4 @@ func test_parse_package_refs {
     }
     assert(had_error)
 }
+

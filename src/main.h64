@@ -94,6 +94,8 @@ func main {
         var return_code = actionparser_add(
             result.args["action args"],
             verbose=result.args["--verbose"]) later:
+
+        await return_code
         return return_code
     } else {
         print("horp: error: Unknown action: " + result.args["action"])
