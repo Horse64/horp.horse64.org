@@ -30,14 +30,16 @@ import argparse from core.horse64.org
 import system from core.horse64.org
 
 import package
+import package.ref as ref
 import package.servermeta
 
 
 func actionparser_add(args, verbose=no) {
     var defs = argparse.ArgumentDefs(program_name="horp add")
     defs.add_arg(
-        "target name", description="The name of the package to "
-        "install, or an install source like a folder with its contents.")
+        "target refs", description="Package refs to install, "
+        "which can be package names, or an install source like a "
+        "folder with its contents.")
     defs.add_switch(
         "--update", takes_arg=no,
         description="If the package is already installed but "
@@ -52,27 +54,18 @@ func actionparser_add(args, verbose=no) {
     if result.args["--verbose"] {
         verbose = yes
     }
-    var package_name = package.
-        normalize_package_name(result.args["target name"])
-    if package_name == none {
-        print("horp: error: Not a valid package name: " +
-            result.args["target name"])
-        return 1
-    }
-    var info = package.servermeta.get_servermeta_info_by_package_name(
-        package_name, verbose=verbose
+    var target_refs = ref.parse_and_locate_package_refs(
+        result.args["target refs"], verbose=verbose
     ) later:
 
     do {
-        await info
+        await target_refs
     } rescue any as err {
-        print("horp: error: Failed to get server meta horp.ini: " +
+        print("horp: error: Failed to resolve package refs: " +
             err.msg)
-        print("Did you target an existing horp package?")
-        system.exit(1)
+        print("Did you specify existing horp packages?")
     }
-    print("Package ini url: " + info.uri)
-    print("Package sources: " + info.sources.as_str())
+    print("Package refs: " + target_refs.as_str())
 }
 
 

@@ -31,12 +31,12 @@ import uri from core.horse64.org
 
 import constraint
 import package
+import package.servermeta as servermeta
 
 
 const version_comp_tokens = {
     "==", ">=", "<=", "!=", ">", "<"
 }
-
 
 type PackageRef {
     var package_name
@@ -44,6 +44,13 @@ type PackageRef {
     var location
 }
 
+func PackageRef.copy {
+    var new_ref = PackageRef(
+        self.package_name, self.constraints,
+        self.location
+    )
+    return new_ref
+}
 
 func PackageRef.init(pkgname, constraints, location) {
     if pkgname != none and pkgname.has("/") {
@@ -60,7 +67,6 @@ func PackageRef.init(pkgname, constraints, location) {
     self.package_name = pkgname
     self.constraints = constraints
 }
-
 
 func PackageRef.as_str() {
     var t = "PackageRef("
@@ -80,13 +86,11 @@ func PackageRef.as_str() {
     return t + ")"
 }
 
-
 type PackageNameWithConstraints {
     var orig_str
     var package_ref
     var constraints
 }
-
 
 func PackageNameWithConstraints.init(
         pkgname_or_ref, constraints, orig_str=none) {
@@ -94,7 +98,6 @@ func PackageNameWithConstraints.init(
     self.constraints = constraints
     self.orig_str = orig_str
 }
-
 
 func get_first_comparable_pos(s) {
     var comp_pos = none
@@ -108,7 +111,6 @@ func get_first_comparable_pos(s) {
     }
     return comp_pos
 }
-
 
 func get_package_ending_space(s) {
     if typename(s) != "str" {
@@ -145,14 +147,14 @@ func get_package_ending_space(s) {
             var followup_name = guess_first_pkg_name(s.sub(i + 1))
             var current_name = s.sub(last_start, i - 1)
 
-            # See if this looks like a space IN a path name (=continue),
+            # See if this looks like a space IN a path (=continue),
             # or like a space between package names (=abort):
             if (not seen_nonspace_in_last or
                     seen_path_sep_in_last or
                     not seen_dot_in_last or
                     package.normalize_package_name(
                     s.sub(last_start, i - 1)) == none) and
-                    # ... exclusion cases where it's clearly not resuming:
+                    # ...contra cases where it's clearly not resuming:
                     package.normalize_package_name(
                         followup_name) == none and
                     not followup_name.has("://") and
@@ -191,7 +193,6 @@ func get_package_ending_space(s) {
     }
     return none
 }
-
 
 func extract_first_pkgname_with_constraints(s) {
     # Prepare string to be in required format:
@@ -320,7 +321,6 @@ func extract_first_pkgname_with_constraints(s) {
     }
 }
 
-
 func parse_package_refs(refstr) {
     if typename(refstr) != "str" {
         return none
@@ -345,7 +345,7 @@ func parse_package_refs(refstr) {
         }
         assert(result.orig_str != none and result.orig_str.len > 0)
 
-        # Now check if there follows an '@', which is not always allowed:
+        # Now check if there's an '@', which is not always allowed:
         var package_name = result.package_ref
         var location = none
         refstr = refstr.sub(result.orig_str.len + 1).trim()
@@ -418,19 +418,75 @@ func parse_package_refs(refstr) {
     return refs
 }
 
+func populate_package_refs_with_locations(refs, verbose=no) {
+    if refs.len == 0 {
+        return yes
+    }
+    var refs_queue = refs.copy()
 
-func add_location_to_package_refs(refs) {
-    for ref in refs {
-        if ref.location != none or
-                ref.package_name == none {
-            continue
-        }
-        var metainfo = get_servermeta_info_by_package_name(
-            ref.package_name
+    # Populate next ref in our queue:
+    var next_ref = refs_queue.pop()
+    var success = populate_single_ref_location(
+        next_ref, verbose=verbose
+    ) later:
+
+    # Bail outs:
+    await success
+    if not success {
+        return no
+    }
+    if refs_queue.len == 0 {
+        return yes
+    }
+
+    # Continue with next queue item:
+    next_ref = refs_queue.pop()
+    success = populate_single_ref_location(
+        next_ref, verbose=verbose
+    ) later repeat
+}
+
+func populate_single_ref_location(ref, verbose=no) {
+    if ref.location != none {
+        return yes
+    }
+    if ref.location == none and
+            ref.package_name == none {
+        return no
+    }
+    var metainfo =
+        servermeta.get_servermeta_info_by_package_name(
+            ref.package_name, verbose=verbose
         ) later:
 
-        await metainfo
+    await metainfo
 
-        print("test")
+    var source = metainfo.get_package_source(ref.package_name)
+    if verbose {
+        print("horp: verbose: Obtained source for \"" +
+            ref.package_name + "\": " + source.as_str())
     }
+    if source != none {
+        ref.location = source
+        return yes
+    }
+    return no
+}
+
+func parse_and_locate_package_refs(refs, verbose=verbose) {
+    var refs = parse_package_refs(refs)
+    if verbose {
+        print("horp: verbose: "
+            "parse_and_locate_package_refs(): populating "
+            "these refs now... -> " + refs.as_str())
+    }
+    var success = populate_package_refs_with_locations(
+        refs, verbose=verbose
+    ) later:
+
+    await result
+    if not success {
+        return none
+    }
+    return refs
 }

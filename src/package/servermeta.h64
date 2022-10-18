@@ -99,7 +99,6 @@ func get_possible_package_hosts(
         "hostname found.")
 }
 
-
 func host_to_package_uri(h) {
     if typename(h) == bytes {
         h = h.as_str()
@@ -111,31 +110,18 @@ func host_to_package_uri(h) {
     return "https://" + h + "/.well-known/horp-package-info/horp.ini"
 }
 
-
-type PackageSource {
-    var package_name
-    var source_uri
-}
-
-
-func PackageSource.init(package_name, source_uri) {
-    self.package_name = package_name
-    self.source_uri = source_uri
-}
-
-
-func PackageSource.as_str() {
-    return "PackageSource(" + self.package_name +
-        " @ " + self.source_uri + ")"
-}
-
-
 type ServerMetaInfo {
     var raw_values protect = {->}
     var sources protect = {->}
     var uri = none
 }
 
+func ServerMetaInfo.get_package_source(package_name) {
+    if package_name in self.sources {
+        return self.sources[package_name]
+    }
+    return none
+}
 
 func ServerMetaInfo.update_from_config(values, from_uri=none) {
     self.uri = from_uri
@@ -153,12 +139,10 @@ func ServerMetaInfo.update_from_config(values, from_uri=none) {
                     package_name) == none {
                 continue
             }
-            self.sources[package_name] =
-                new PackageSource(package_name, value)
+            self.sources[package_name] = value
         }
     }
 }
-
 
 func get_servermeta_info_by_package_name (
         package_name, verbose=no
