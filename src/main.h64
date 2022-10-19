@@ -34,14 +34,51 @@ import package.ref as ref
 import package.servermeta
 
 
-func actionparser_add(args, verbose=no) {
-    var defs = argparse.ArgumentDefs(program_name="horp add")
+var package_refs_explainer = "(e.g. a package name, "
+    "or folder path to a package's local source copy)"
+
+func actionparser_info(args, verbose=no) {
+    var defs = argparse.ArgumentDefs(
+        program_name="horp info", description="Show info about the given "
+            "packages.")
     defs.add_arg(
-        "target refs", description="Package refs to install, "
-        "which can be package names, or an install source like a "
-        "folder with its contents.")
+        "package refs", description="Package refs " +
+        package_refs_explainer + " to print "
+        "information about, like version, source location, etc.")
+    defs.add_switch("--verbose", description="Output extra information "
+        "when doing things.")
+    var result = argparse.parse(defs, args)
+    if result.output != "" {
+        print(result.output)
+        return result.exit_code
+    }
+    if result.args["--verbose"] {
+        verbose = yes
+    }
+    var target_refs = ref.parse_and_locate_package_refs(
+        result.args["package refs"], verbose=verbose
+    ) later:
+
+    do {
+        await target_refs
+    } rescue any as err {
+        print("horp: error: Failed to resolve package refs: " +
+            err.msg)
+        print("Did you specify existing horp packages?")
+    }
+    print("Package refs: " + target_refs.as_str())
+}
+
+
+func actionparser_add(args, verbose=no) {
+    var defs = argparse.ArgumentDefs(program_name="horp add",
+        description="Install the specified packages to the local "
+        "horse_modules folder.")
+    defs.add_arg(
+        "package refs", description="Package refs " +
+        package_refs_explainer + " to install locally.")
     defs.add_switch(
-        "--update", takes_arg=no,
+        "--update", aliases=["-u"], takes_arg=no,
         description="If the package is already installed but "
             "a newer version is available, upgrade it.")
     defs.add_switch("--verbose", description="Output extra information "
@@ -55,7 +92,7 @@ func actionparser_add(args, verbose=no) {
         verbose = yes
     }
     var target_refs = ref.parse_and_locate_package_refs(
-        result.args["target refs"], verbose=verbose
+        result.args["package refs"], verbose=verbose
     ) later:
 
     do {
@@ -70,10 +107,13 @@ func actionparser_add(args, verbose=no) {
 
 
 func main {
-    var defs = new argparse.ArgumentDefs(program_name="horp")
+    var defs = new argparse.ArgumentDefs(
+        program_name="horp",
+        description="Horp is the official Horse64 package manager. "
+            "Use it to get and upgrade additional libraries and tools.")
     defs.add_arg("action", description="Pick an available actions: "
-        "add, del. To see details for an action, use it with --help "
-        "like e.g.: horp add --help")
+        "add, info, del. To see details for an action, use it with "
+        "--help.\nE.g.: horp add --help")
     defs.add_catchall("action args", description="List of "
         "arguments for the specified action")
     defs.add_switch("--verbose", description="Output extra information "
@@ -90,9 +130,29 @@ func main {
 
         await return_code
         return return_code
+    } elseif result.args["action"] == "info" {
+        var return_code = actionparser_info(
+            result.args["action args"],
+            verbose=result.args["--verbose"]) later:
+
+        await return_code
+        return return_code
     } else {
+        var commonly_wrong = {
+            "add"-> {"install"},
+            "add --reinstall"-> {"reinstall"},
+            "info"-> {"show"},
+            "del"-> {"delete", "remove", "uninstall"},
+        }
         print("horp: error: Unknown action: " + result.args["action"])
         print("Use horp --help to show usage.")
+        for entry in commonly_wrong {
+            var variants = commonly_wrong[entry]
+            if variants.has(result.args["action"].lower()) or
+                    entry.lower() == result.args["action"] {
+                print('Did you maybe mean to use "horp ' + entry + '"?')
+            }
+        }
         return 1
     }
 }
