@@ -214,7 +214,7 @@ func get_servermeta_info_by_package_name (
     assert(result_str != none)
     var result = new ServerMetaInfo()
     do {
-        var values = confparse.parse_conf_str(result_str)
+        var values = confparse.parse_str(result_str)
     } rescue confparse.ConfParseError as e {
         if verbose {
             print("horp: verbose: "
