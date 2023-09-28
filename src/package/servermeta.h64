@@ -1,5 +1,5 @@
 # @module package.servermeta
-# Copyright (c) 2020-2022,  ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2023,  ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -107,7 +107,7 @@ func host_to_package_uri(h) {
             h.has("://") or not h.has(".") {
         throw new ValueException("Not a valid host.")
     }
-    return "https://" + h + "/.well-known/horp-package-info/horp.ini"
+    return "https://" + h + "/.well-known/horp-package-info/horp.conf"
 }
 
 type ServerMetaInfo {
@@ -158,7 +158,7 @@ func get_servermeta_info_by_package_name (
         query_uris.add(host_to_package_uri(host))
     }
     if verbose {
-        print("horp: debug: get_package_servermeta_ini(): "
+        print("horp: debug: get_package_servermeta_conf(): "
             "will consecutively try " +
             query_uris.len.as_str() + " URI(s)...")
     }
@@ -180,7 +180,7 @@ func get_servermeta_info_by_package_name (
     }
 
     if verbose {
-        print("horp: debug: get_package_servermeta_ini(): "
+        print("horp: debug: get_package_servermeta_conf(): "
             "processing URI result: " +
             next_uri)
     }
@@ -190,7 +190,7 @@ func get_servermeta_info_by_package_name (
             # None left to try. Just spit out the error:
             if verbose {
                 print("horp: debug: "
-                    "get_package_servermeta_ini(): "
+                    "get_package_servermeta_conf(): "
                     "all candidates failed, returning error")
             }
             if had_error == none {
@@ -207,7 +207,7 @@ func get_servermeta_info_by_package_name (
     }
     if verbose {
         print("horp: debug: "
-            "get_package_servermeta_ini(): "
+            "get_package_servermeta_conf(): "
             "success fetching URI: " + next_uri)
     }
 
@@ -218,16 +218,16 @@ func get_servermeta_info_by_package_name (
     } rescue confparse.ConfParseError as e {
         if verbose {
             print("horp: verbose: "
-                "get_package_servermeta_ini(): "
-                "oops, .ini at this URI is malformed: " +
+                "get_package_servermeta_conf(): "
+                "oops, .conf at this URI is malformed: " +
                 next_uri)
         }
         throw e
     }
     if values.len == 0 {
         print("horp: verbose: "
-            "get_package_servermeta_ini(): "
-            "oops, .ini at this URI has no sections: " +
+            "get_package_servermeta_conf(): "
+            "oops, .conf at this URI has no sections: " +
             next_uri)
         throw new confparse.ConfParseError(
             "Config file has no sections."
