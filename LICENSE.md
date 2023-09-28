@@ -11,7 +11,7 @@ Files outside of the `vendor` folder are, unless indicated
 otherwise, licensed under the following **BSD-2-Clause license**:
 
 ```
-Copyright (c) 2020-2023,  ellie/@ell1e & Horse64 Team (see AUTHORS.md).
+Copyright (c) 2020-2023,  ellie/@ell1e & Horp Team (see AUTHORS.md).
 
 
 Redistribution and use in source and binary forms, with or without
@@ -248,5 +248,7 @@ following **Apache 2 License**:
 ## Contributions, Binaries
 
 Same rules apply as for [main repo contributions, including the DCO](
-    https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#contributions). Also, official horp binaries may include [the official logo](
+    https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#contributions).
+Also, official horp binaries may include [the official logo](
     https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#logo-license).
+
