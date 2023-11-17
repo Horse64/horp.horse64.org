@@ -1,5 +1,5 @@
 # @module version
-# Copyright (c) 2020-2022,  ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,11 +25,9 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
-
 var ordered_incomplete_hint_words = [
     "dev", "alpha", "beta", "gamma"
 ]
-
 
 func hints_release_candidate(v) {
     if v.startswith("rc") or (
@@ -40,14 +38,12 @@ func hints_release_candidate(v) {
     return no
 }
 
-
 func word_denotes_version_to_lesser(v) {
     if hints_release_candidate(v) {
         return yes
     }
     return ordered_incomplete_hint_words.has(v)
 }
-
 
 func split_at_number_word_switches(v) {
     var result = []
@@ -66,7 +62,6 @@ func split_at_number_word_switches(v) {
     result.add(v.sub(current_start))
     return result
 }
-
 
 func compare_known_words(v1, v2) {
     if is_num(v1) and is_num(v2) {
@@ -110,7 +105,6 @@ func compare_known_words(v1, v2) {
     return 0
 }
 
-
 func compare_version_part(v1, v2) {
     if is_num(v1) and is_num(v2) {
         # Do direct number comparison since they're numbers.
@@ -132,7 +126,6 @@ func compare_version_part(v1, v2) {
     # If we're still clueless, try to compare as words:
     return compare_known_words(v1, v2)
 }
-
 
 func compare_versions(v1, v2) {
     # Normalize both versions:

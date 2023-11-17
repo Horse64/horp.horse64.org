@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022,  ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -24,9 +24,7 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
-
 import version
-
 
 func test_split_at_number_word_switches {
     assert(version.
@@ -62,3 +60,4 @@ func test_compare_versions {
     assert(version.
         compare_versions("1-bananas1", "1-bananas2") < 0)
 }
+

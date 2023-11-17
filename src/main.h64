@@ -1,5 +1,5 @@
 # @module main
-# Copyright (c) 2020-2022,  ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,14 +25,12 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
-
 import argparse from core.horse64.org
 import system from core.horse64.org
 
 import package
 import package.ref as ref
 import package.servermeta
-
 
 var package_refs_explainer = "(e.g. a package name, "
     "or folder path to a package's local source copy)"

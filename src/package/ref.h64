@@ -1,5 +1,5 @@
 # @module package.ref
-# Copyright (c) 2020-2022,  ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,14 +25,12 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
-
 import system from core.horse64.org
 import uri from core.horse64.org
 
 import constraint
 import package
 import package.servermeta as servermeta
-
 
 const version_comp_tokens = {
     "==", ">=", "<=", "!=", ">", "<"
@@ -474,19 +472,20 @@ func populate_single_ref_location(ref, verbose=no) {
 }
 
 func parse_and_locate_package_refs(refs, verbose=verbose) {
-    var refs = parse_package_refs(refs)
+    var parsed_refs = parse_package_refs(refs)
     if verbose {
         print("horp: verbose: "
             "parse_and_locate_package_refs(): populating "
-            "these refs now... -> " + refs.as_str())
+            "these refs now... -> " + parsed_refs.as_str())
     }
     var success = populate_package_refs_with_locations(
-        refs, verbose=verbose
+        parsed_refs, verbose=verbose
     ) later:
 
     await result
     if not success {
         return none
     }
-    return refs
+    return parsed_refs
 }
+

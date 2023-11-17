@@ -1,5 +1,5 @@
 # @module package.servermeta
-# Copyright (c) 2020-2023,  ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -30,7 +30,6 @@ import net from core.horse64.org
 import net.fetch from core.horse64.org
 
 import package
-
 
 ## @func get_possible_package_hosts
 ## For a given package name, find the associated
@@ -117,7 +116,7 @@ type ServerMetaInfo {
 }
 
 func ServerMetaInfo.get_package_source(package_name) {
-    if package_name in self.sources {
+    if self.sources.has(package_name) {
         return self.sources[package_name]
     }
     return none
@@ -127,7 +126,7 @@ func ServerMetaInfo.update_from_config(values, from_uri=none) {
     self.uri = from_uri
     self.raw_values = values
     self.sources = {->}
-    if "package sources" in self.raw_values {
+    if self.raw_values.has("package sources") {
         for key in self.raw_values["package sources"] {
             if not key.endswith(" source") {
                 continue
@@ -173,7 +172,7 @@ func get_servermeta_info_by_package_name (
 
     var had_error = none
     do {
-        await query_uri, result_str
+        await result_str
     } rescue any as e {
         nonfailed_uri_count -= 1
         had_error = e
