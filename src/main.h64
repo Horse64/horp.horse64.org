@@ -1,5 +1,5 @@
-# @module main
-# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
+## @module main
+# Copyright (c) 2020-2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -33,7 +33,40 @@ import package.ref as ref
 import package.servermeta
 
 var package_refs_explainer = "(e.g. a package name, "
-    "or folder path to a package's local source copy)"
+    "or dir path to a package's local source directory)"
+
+func print_info_list_files(refs, verbose=no) {
+    var queue = refs.copy()
+
+    var next_ref = queue.pop()
+    if verbose {
+        print("horp: verbose: print_info_list_files(): "
+            "Obtaining file list for \"" +
+            next_ref.package_name + "\"...")
+    }
+    var result = ref.print_files_list_from_ref(
+        next_ref) later:
+
+    await files
+    if not result {
+        print("horp: error: Failed to obtain files for this ref, "
+            "check if this package is actually accessible: " +
+            next_ref.as_str())
+        return later 1
+    }
+    if queue.len == 0 {
+        return later 0
+    }
+
+    next_ref = queue.pop()
+    if verbose {
+        print("horp: verbose: print_info_list_files(): "
+            "Obtaining file list for \"" +
+            next_ref.package_name + "\"...")
+    }
+    files = ref.print_files_list_from_ref(
+        next_ref) later repeat
+}
 
 func actionparser_info(args, verbose=no) {
     var defs = argparse.ArgumentDefs(
@@ -44,7 +77,9 @@ func actionparser_info(args, verbose=no) {
         package_refs_explainer + " to print "
         "information about, like version, source location, etc.")
     defs.add_switch("--verbose", description="Output extra information "
-        "when doing things.")
+        "when assembling the info.")
+    defs.add_switch("--list-files", description="Instead of more "
+        "general info, list all the files included in the package(s).")
     var result = argparse.parse(defs, args)
     if result.output != "" {
         print(result.output)
@@ -53,7 +88,7 @@ func actionparser_info(args, verbose=no) {
     if result.args["--verbose"] {
         verbose = yes
     }
-    var target_refs = ref.parse_and_locate_package_refs(
+    var target_refs = ref.parse_and_populate_package_refs(
         result.args["package refs"], verbose=verbose
     ) later:
 
@@ -63,15 +98,41 @@ func actionparser_info(args, verbose=no) {
         print("horp: error: Failed to resolve package refs: " +
             err.msg)
         print("Did you specify existing horp packages?")
+        return 1
     }
-    print("Package refs: " + target_refs.as_str())
-}
 
+    # Helper functions to execute detailed info requests if any:
+    func print_info_list_files_if_needed(refs, verbose=no) {
+        if not result.args["--list-files"] {
+            return none
+        }
+        var exit_code = print_info_list_files(
+            refs, verbose=verbose
+        ) later:
+
+        await exit_code
+        return exit_code
+    }
+
+    # Figure out what info we should actually provide:
+    var result = print_info_list_files_if_needed(
+        target_refs, verbose=verbose) later:
+
+    await result
+    if result != none {
+        return result
+    }
+
+    # If we arrive here we weren't asked to do anything special,
+    # so just print out the basic refs:
+    print("Package refs: " + target_refs.as_str())
+    return 0
+}
 
 func actionparser_add(args, verbose=no) {
     var defs = argparse.ArgumentDefs(program_name="horp add",
         description="Install the specified packages to the local "
-        "horse_modules folder.")
+        "horse_modules directory.")
     defs.add_arg(
         "package refs", description="Package refs " +
         package_refs_explainer + " to install locally.")
@@ -154,3 +215,4 @@ func main {
         return 1
     }
 }
+

@@ -1,5 +1,5 @@
-# @module package.ref
-# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
+## @module package.ref
+# Copyright (c) 2020-2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,10 +25,15 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
+import confparse from core.horse64.org
+import io from core.horse64.org
+import net from core.horse64.org
+import path from core.horse64.org
 import system from core.horse64.org
 import uri from core.horse64.org
 
 import constraint
+import limit
 import package
 import package.servermeta as servermeta
 
@@ -328,7 +333,7 @@ func parse_package_refs(refstr) {
 
     refstr = refstr.trim()
     while refstr.len > 0 {
-        # Extract the next package name/folder name with constraints:
+        # Extract the next package name/dir name with constraints:
         result = extract_first_pkgname_with_constraints(refstr)
         if result == none {
             var range_end = math.min(20, math.max(0, refstr.len - 2))
@@ -353,7 +358,7 @@ func parse_package_refs(refstr) {
             if refstr.startswith("@") {
                 throw new ValueError(
                     "Encountered invalid location '@', can't have "
-                    "a location for any URI or folder package ref. "
+                    "a location for any URI or dir package ref. "
                     "It occurs after: " + result.orig_str
                 )
             }
@@ -416,23 +421,35 @@ func parse_package_refs(refstr) {
     return refs
 }
 
-func populate_package_refs_with_locations(refs, verbose=no) {
+func populate_package_refs_with_info(refs, verbose=no) {
     if refs.len == 0 {
         return yes
     }
     var refs_queue = refs.copy()
 
-    # Populate next ref in our queue:
     var next_ref = refs_queue.pop()
+
+    # Populate location if possible:
     var success = populate_single_ref_location(
         next_ref, verbose=verbose
     ) later:
 
-    # Bail outs:
     await success
     if not success {
         return no
     }
+
+    # Populate name of package ref is possible:
+    success = populate_single_ref_name(
+        next_ref, verbose=verbose
+    ) later:
+
+    await success
+    if not success {
+        return no
+    }
+
+    # If our queue is done, exit:
     if refs_queue.len == 0 {
         return yes
     }
@@ -456,7 +473,6 @@ func populate_single_ref_location(ref, verbose=no) {
         servermeta.get_servermeta_info_by_package_name(
             ref.package_name, verbose=verbose
         ) later:
-
     await metainfo
 
     var source = metainfo.get_package_source(ref.package_name)
@@ -471,14 +487,60 @@ func populate_single_ref_location(ref, verbose=no) {
     return no
 }
 
-func parse_and_locate_package_refs(refs, verbose=verbose) {
+func populate_single_ref_name(ref, verbose=no) {
+    if ref.location == none or
+            ref.package_name != none {
+        return yes
+    }
+    var pkg_uri = ref.location
+    var uri_protocol = uri.get_protocol(pkg_uri)
+    if not {"file", "vfs"}.has(uri_protocol.lower()) {
+        return yes
+    }
+    var horp_conf_uri = uri.add_part(pkg_uri, "horp.conf")
+    var horp_conf_path = path.join(
+        uri.to_file_or_vfs_path(pkg_uri), "horp.conf")
+    var is_vfs = (uri_protocol.lower() == "vfs")
+
+    var exists = io.exists(horp_conf_path,
+        allow_vfs=is_vfs, allow_disk=not is_vfs) later:
+
+    await exists
+    if not exists {
+        return no
+    }
+    var contents = net.fetch.get_str(
+        horp_conf_uri,
+        max_size=limit.conf_file_max_bytes,
+        allow_vfs=is_vfs, allow_disk=not is_vfs
+    ) later:
+
+    await contents
+    var conf_contents = confparse.parse_str(
+        contents, allow_multiline=yes,
+        allow_multiassign=yes,
+        error_on_mistakes=no
+    )
+
+    if conf_contents == none or
+            not conf_contents.has("package") {
+        return no
+    }
+    if not conf_contents["package"].has("name") {
+        return no
+    }
+    ref.package_name = conf_contents["package"]["name"]
+    return yes
+}
+
+func parse_and_populate_package_refs(refs, verbose=verbose) {
     var parsed_refs = parse_package_refs(refs)
     if verbose {
         print("horp: verbose: "
             "parse_and_locate_package_refs(): populating "
             "these refs now... -> " + parsed_refs.as_str())
     }
-    var success = populate_package_refs_with_locations(
+    var success = populate_package_refs_with_info(
         parsed_refs, verbose=verbose
     ) later:
 
@@ -487,5 +549,30 @@ func parse_and_locate_package_refs(refs, verbose=verbose) {
         return none
     }
     return parsed_refs
+}
+
+func print_files_list_from_ref(ref, allow_vfs=yes,
+        allow_disk=yes, skip_meta_files=no) {
+    var pkg_uri = ref.location
+    if pkg_uri == none {
+        return no
+    }
+    var prot = uri.get_protocol(pkg_uri)
+    if not {"file", "vfs"}.has(prot.lower()) {
+        return no
+    }
+    var pkg_path = uri.to_file_or_vfs_path(pkg_uri)
+    func callback(rel_path) {
+        print(rel_path)
+    }
+    # XXX Important: Even for a vfs:// URI, allow_disk=yes should
+    # be true, and same for file:// with allow_vfs. This is so
+    # users can have a package partially made up by both disk
+    # and vfs files.
+    var result = package.do_for_all_files(callback, pkg_path,
+        skip_meta_files=skip_meta_files, allow_vfs=allow_vfs,
+        allow_disk=allow_disk) later:
+    await result
+    return result
 }
 

@@ -1,5 +1,5 @@
-# @module package.conf
-# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
+## @module package.conf
+# Copyright (c) 2020-2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -26,13 +26,144 @@
 # license, see accompanied LICENSE.md.
 
 import confparse from core.horse64.org
+import io from core.horse64.org
+import net.fetch from core.horse64.org
+import path from core.horse64.org
+import uri from core.horse64.org
+
+import limit
 
 type PackageConf {
     var raw_str protect
     var values protect
 }
 
-func package_conf_from_file(path) {
-   
+func load_from_uri(conf_uri) {
+    var contents = net.fetch.get_str(
+        conf_uri, max_size=limit.conf_file_max_bytes,
+        allow_vfs=yes, allow_disk=yes
+    ) later:
+
+    await contents
+    var conf_contents = confparse.parse_str(
+        contents, allow_multiline=yes,
+        allow_multiassign=yes,
+        error_on_mistakes=yes
+    )
+
+    var result = new PackageConf()
+    result.raw_str = contents
+    result.values = conf_contents
+
+    if not result.values.has("package") {
+        result.values["package"] = {->}
+    }
+
+    var code_patterns = []
+    if result.values.has("package") and
+            result.values["package"].has("code files") and
+            typename(result.values["package"]["code files"]) == "str" {
+        var patterns = result.values["package"]["code files"].split(",")
+        for pattern in patterns {
+            pattern = pattern.trim()
+            if pattern.len > 0 {
+                code_patterns.add(pattern)
+            }
+        }
+    } else {
+        code_patterns = ["**.h64"]
+    }
+    result.values["package"]["code files"] = code_patterns
+
+    var doc_file_patterns = []
+    if result.values.has("package") and
+            result.values["package"].has("documentation files") and
+            typename(result.values["package"]
+                     ["documentation files"]) == "str" {
+        var patterns = result.values["package"]
+            ["documentation files"].split(",")
+        for pattern in patterns {
+            pattern = pattern.trim()
+            if pattern.len > 0 {
+                doc_file_patterns.add(pattern)
+            }
+        }
+    } else {
+        doc_file_patterns = ["docs/**", "README.md", "/CONTRIBUTING.md"]
+    }
+    result.values["package"]["documentation files"] = doc_file_patterns
+
+    var extra_file_patterns = []
+    if result.values.has("package") and
+            result.values["package"].has("extra files") and
+            typename(result.values["package"]["extra files"]) == "str" {
+        var patterns = result.values["package"]["extra files"].split(",")
+        for pattern in patterns {
+            pattern = pattern.trim()
+            if pattern.len > 0 {
+                extra_file_patterns.add(pattern)
+            }
+        }
+    } else {
+        extra_file_patterns = ["/AUTHORS.md"]
+    }
+    result.values["package"]["extra files"] = extra_file_patterns
+
+    var exclude_file_patterns = []
+    if result.values.has("package") and
+            result.values["package"].has("exclude files") and
+            typename(result.values["package"]["exclude files"]) == "str" {
+        var patterns = result.values["package"]["exclude files"].split(",")
+        for pattern in patterns {
+            pattern = pattern.trim()
+            if pattern.len > 0 {
+                exclude_file_patterns.add(pattern)
+            }
+        }
+    } else {
+        exclude_file_patterns = ["vendor/**"]
+    }
+    result.values["package"]["exclude files"] = exclude_file_patterns
+
+    var license_file_patterns = []
+    if result.values.has("package") and
+            result.values["package"].has("license files") and
+            typename(result.values["package"]["license files"]) == "str" {
+        var patterns = result.values["package"]["license files"].split(",")
+        for pattern in patterns {
+            pattern = pattern.trim()
+            if pattern.len > 0 {
+                license_file_patterns.add(pattern)
+            }
+        }
+    } else {
+        license_file_patterns = ["LICENSE.md", "LICENSE.txt"]
+    }
+    result.values["package"]["license files"] = license_file_patterns
+
+    return result
+}
+
+func load_from_file(package_dir, allow_disk=yes, allow_vfs=yes) {
+    if not allow_vfs and not allow_vfs {
+        throw new io.PathNotFoundError("File not found.")
+    }
+    var conf_path = path.join(package_dir, "horp.conf")
+    var exists_in_vfs = io.exists(package_dir, allow_disk=no,
+        allow_vfs=allow_vfs) later:
+
+    await exists_in_vfs
+    var is_vfs = (not allow_disk) or
+        (allow_vfs and exists_in_vfs)
+    var conf_uri
+    if is_vfs {
+        conf_uri = uri.from_vfs_path(conf_path)
+    } else {
+        conf_uri = uri.from_disk_path(conf_path)
+    }
+    var result = load_from_uri(conf_uri) later:
+
+    await result
+    return result
 }
  

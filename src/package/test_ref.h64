@@ -63,16 +63,16 @@ func test_extract_first_pkgname_with_constraints {
 
     result = package.ref.
         extract_first_pkgname_with_constraints(
-        "./some/folder path/")
+        "./some/directory path/")
     assert(result != none)
-    assert(result.package_ref == "./some/folder path/")
+    assert(result.package_ref == "./some/directory path/")
     assert(result.constraints.len == 0)
 
     result = package.ref.
         extract_first_pkgname_with_constraints(
-        "./some/folder path/ == 2.0")
+        "./some/directory path/ == 2.0")
     assert(result != none)
-    assert(result.package_ref == "./some/folder path/")
+    assert(result.package_ref == "./some/directory path/")
     assert(result.constraints.len == 1)
 
     result = package.ref.

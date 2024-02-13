@@ -1,5 +1,5 @@
-# @module package
-# Copyright (c) 2020-2023, ellie/@ell1e & Horp Team (see AUTHORS.md).
+## @module package
+# Copyright (c) 2020-2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -25,7 +25,12 @@
 # Alternatively, at your option, this file is offered under the Apache 2
 # license, see accompanied LICENSE.md.
 
+import io from core.horse64.org
+import path from core.horse64.org
 import text from core.horse64.org
+import wildcard from core.horse64.org
+
+import package.conf
 
 ## @func normalize_package_name
 ## Normalizes a horp package name.
@@ -68,6 +73,141 @@ func normalize_package_name(h) {
         return none
     }
     return h
+}
+
+## Do something for every code file found in a given
+## package dir. Requires the package to be downloaded first.
+## This is useful e.g. for building packages or copying them.
+## @param callback The callback function to call on every file.
+##     Will be passed the relative(!) path, relative to the
+##     given package dir, as first and only parameter.
+##     If the callback returns the bool value `no`, then the
+##     iteration over the files will abort. If it returns
+##     anything else, it will continue to the end.
+## @param skip_meta_files Whether to skip meta files like
+##     horp.conf or template files, or whether to include them.
+##     Pure documentation files with no build-relevant code or
+##     config contents are always skipped, e.g. LICENSE.md is
+##     always skipped.
+## @returns yes if the iteration fully completed, no if it
+##     aborted due to the callback returning no.
+func do_for_all_files(callback, package_dir,
+        skip_meta_files=yes, allow_vfs=yes, allow_disk=yes) {
+
+    func do_for_all_files_in_sublist(l) {
+        for entry in l {
+            var value = callback(entry)
+            if value == no {
+                return no
+            }
+        }
+        return yes
+    }
+
+    var conf = package.conf.load_from_file(
+        package_dir, allow_vfs=allow_vfs, allow_disk=allow_disk
+    ) later:
+
+    await conf
+    var code_patterns = conf.values["package"]["code files"]
+    var extra_patterns = conf.values["package"]["extra files"]
+    var exclude_patterns = conf.values["package"]["exclude files"]
+    var license_patterns = conf.values["package"]["license files"]
+    var meta_file_patterns = ["horp.conf", "horp-build.conf"] +
+        conf.values["package"]["documentation files"]
+    code_patterns =
+        wildcard.transform_list_for_rel_paths(code_patterns)
+    extra_patterns =
+        wildcard.transform_list_for_rel_paths(extra_patterns)
+    exclude_patterns =
+        wildcard.transform_list_for_rel_paths(exclude_patterns)
+    license_patterns =
+        wildcard.transform_list_for_rel_paths(license_patterns)
+    meta_file_patterns =
+        wildcard.transform_list_for_rel_paths(meta_file_patterns)
+
+    var walker = io.tree_list_walker(
+        package_dir, relative=yes, return_dirs=no,
+        exclude_dot_names=yes, exclude_dir_names=[],
+        allow_vfs=allow_vfs, allow_disk=allow_disk)
+
+    var entries = walker.walk() later:
+    await entries
+    if entries == none {
+        return yes
+    }
+
+    var file_list = []
+    for entry in entries {
+        # First, check if we need to skip this:
+        var must_exclude = no
+        for pattern in exclude_patterns {
+            if wildcard.match(pattern, entry) {
+                must_exclude = yes
+                break
+            }
+        }
+        if must_exclude {
+            continue
+        }
+
+        # Check if this is a meta file:
+        var file_is_meta = (
+            entry.ends(".tmpl")
+        )
+        var explicit_meta_match = no
+        for pattern in meta_file_patterns {
+            if wildcard.match(pattern, entry) {
+                explicit_meta_match = yes
+                break
+            }
+        }
+        if not explicit_meta_match {
+            for pattern in license_patterns {
+                if wildcard.match(pattern, entry) {
+                    explicit_meta_match = yes
+                    break
+                }
+            }
+        }
+
+        # Bail if we don't want meta files and it is one:
+        if skip_meta_files and file_is_meta {
+            continue
+        }
+
+        # Check if this matches a code file:
+        var match_found = explicit_meta_match
+        if not match_found {
+            for pattern in code_patterns {
+                if wildcard.match(pattern, entry) {
+                    match_found = yes
+                    break
+                }
+            }
+            if not match_found and not skip_meta_files and
+                    entry.ends(".tmpl") {
+                var name_without_tmpl =
+                    entry.sub(1, entry.len - ".tmpl".len)
+                if entry.len > 0 and not entry.ends(path.sep) {
+                    for pattern in code_patterns {
+                        if wildcard.match(pattern, entry) {
+                            match_found = yes
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        if match_found {
+            file_list.append(entry)
+        }
+    }
+    if not do_for_all_files_in_sublist(file_list) {
+        return later no
+    }
+
+    entries = walker.walk() later repeat
 }
 
 ## Trim a given package name, which should always be a domain,
