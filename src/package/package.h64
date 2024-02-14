@@ -26,6 +26,7 @@
 # license, see accompanied LICENSE.md.
 
 import io from core.horse64.org
+import path from core.horse64.org
 import text from core.horse64.org
 import wildcard from core.horse64.org
 
@@ -96,14 +97,57 @@ func do_for_all_files(callback, package_dir,
         code_with_templates=yes, allow_vfs=yes, allow_disk=yes,
         verbose=no) {
 
-    func do_for_all_files_in_sublist(l) {
-        for entry in l {
-            var value = callback(entry)
-            if value == no {
-                return no
+    func handle_entry_in_sublist(entry, skip_if_exists_path) {
+        if skip_if_exists_path == none {
+            var result = callback(entry) later:
+
+            await result
+            if result == no {
+                return later no
             }
+            return later yes
         }
-        return yes
+
+        var result = io.exists(
+            skip_if_exists_path, allow_vfs=allow_vfs,
+            allow_disk=allow_disk
+        ) later:
+
+        await result
+        if result {
+            return later yes
+        }
+        result = callback(entry) later:
+
+        await result
+        if result == no {
+            return later no
+        }
+        return later yes
+    }
+
+    func do_for_all_files_in_sublist(l) {
+        if l.len == 0 {
+            return yes
+        }
+
+        var next_entry = l.pop()
+        var handle_result = handle_entry_in_sublist(
+            next_entry[1], next_entry[2]
+        ) later:
+
+        await handle_result
+        if not handle_result {
+            return no
+        }
+
+        if l.len == 0 {
+            return yes
+        }
+        next_entry = l.pop()
+        handle_result = handle_entry_in_sublist(
+            next_entry[1], next_entry[2]
+        ) later repeat
     }
 
     if verbose {
@@ -221,6 +265,7 @@ func do_for_all_files(callback, package_dir,
         allow_vfs=allow_vfs, allow_disk=allow_disk)
 
     var entries = walker.walk() later:
+
     await entries
     if entries == none {
         return yes
@@ -273,6 +318,7 @@ func do_for_all_files(callback, package_dir,
         }
 
         # Check if this matches a code file:
+        var revoke_entry_if_path_exists = none
         if not file_confirmed_included or
                 listing_only_code {
             var is_code_or_templated_code = no
@@ -280,6 +326,9 @@ func do_for_all_files(callback, package_dir,
                 if not file_is_template {
                     if wildcard.match(pattern, entry) {
                         is_code_or_templated_code = yes
+                        revoke_entry_if_path_exists = (
+                            entry + ".tmpl"
+                        )
                         break
                     }
                 } elseif file_is_template and
@@ -293,10 +342,18 @@ func do_for_all_files(callback, package_dir,
             file_confirmed_included = is_code_or_templated_code
         }
         if file_confirmed_included {
-            file_list.append(entry)
+            file_list.append([
+                entry,
+                if revoke_entry_if_path_exists != none
+                    (path.join(package_dir, revoke_entry_if_path_exists))
+                    else (none)
+            ])
         }
     }
-    if not do_for_all_files_in_sublist(file_list) {
+    var result = do_for_all_files_in_sublist(file_list) later:
+
+    await result
+    if result == no {
         return later no
     }
 

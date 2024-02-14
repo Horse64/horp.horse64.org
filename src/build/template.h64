@@ -26,29 +26,117 @@
 # license, see accompanied LICENSE.md.
 
 import argparse from core.horse64.org
+import path from core.horse64.org
+import uri from core.horse64.org
 
+import package
 import package.ref as ref
+
+func process_templates_for_ref_unsafe(ref, action) {
+    var where_uri = ref.location
+    var where_prot = uri.get_protocol(where_uri)
+    if not {"file", "vfs"}.has(where_prot.lower()) {
+        print("horp: error: Can't process templates for package, "
+            "since local install location wasn't found: " + ref.as_str())
+        return later no
+    }
+    var pkg_folder = uri.to_file_or_vfs_path(where_uri)
+
+    var processed_any_template = no
+    func callback(file_entry) {
+        if action == "apply" and (
+                file_entry != "horp-build.conf" and
+                not file_entry.ends(path.sep + "horp-build.conf")) {
+            return none
+        } elseif action == "list" and
+                file_entry.len > ".tmpl".len and
+                file_entry.ends(".tmpl") {
+            print("Template: " + file_entry)
+            processed_any_template = yes
+        }
+        return later none
+    }
+
+    var success = package.do_for_all_files(callback, pkg_folder,
+        allow_vfs=yes, allow_disk=yes,
+        verbose=no) later:
+
+    await success
+    if not success {
+        print("horp: error: File listing failed, "
+            "is this package accessible on disk? For package: " +
+            ref.as_str())
+        return later no
+    }
+    if not processed_any_template and action == "list" {
+        print("horp: warning: No templates found!")
+    }
+    return later yes
+}
+
+func process_templates_for_ref(ref, action) {
+    do {
+        var result = process_templates_for_ref_unsafe(ref, action)
+        later:
+
+        await result
+        if not result {
+            return no
+        }
+    } rescue any as e {
+        print("horp: error: Failed to process templating for "
+            "ref: " + ref.as_str())
+        print("horp: error: Error details: " + e.as_str())
+        return no
+    }
+    return yes
+}
+
+func process_templates_for_refs(refs, action) {
+    var queue = refs.copy()
+    if queue.len == 0 {
+        return 0
+    }
+    var next_ref = refs.pop()
+    var build_result = process_templates_for_ref(next_ref, action)
+    later:
+
+    await build_result
+    if not build_result {
+        return 1
+    }
+
+    if queue.len == 0 {
+        return 0
+    }
+    next_ref = refs.pop()
+    build_result = process_templates_for_ref(
+        next_ref
+    ) later repeat
+}
 
 func actionparser_template(args, verbose=no) {
     var defs = argparse.ArgumentDefs(program_name="horp template",
         description="Instead of running the full build actions, "
         "just run the templating build step on the given package "
         "directory.")
+    defs.add_arg("action", description="Specify an action to execute, "
+        "available choices being \"list\" (list the template files) and "
+        "\"apply\" (write out the target files for the templates).")
     defs.add_arg(
-        "package dir", description="The package directory "
-        "in which to run teh templating build step.")
+        "package refs", description="The packages for which "
+        "to handle the templates.")
     defs.add_switch("--verbose", description="Output extra information "
         "when doing things.")
     var result = argparse.parse(defs, args)
     if result.output != "" {
         print(result.output)
-        return result.exit_code
+        return later result.exit_code
     }
     if result.args["--verbose"] {
         verbose = yes
     }
-    var target_path = result.args["package dir"]
-    var target_refs = ref.parse_and_locate_package_refs(
+    var target_refs = ref.parse_and_populate_package_refs(
         result.args["package refs"], verbose=verbose
     ) later:
 
@@ -59,6 +147,16 @@ func actionparser_template(args, verbose=no) {
             err.msg)
         print("Did you specify existing horp packages?")
     }
-    print("Package refs: " + target_refs.as_str())
+    if not {"apply", "list"}.has(result.args["action"]) {
+        print("horp: error: Unknown action \"" +
+            result.args["action"] + "\".")
+        print("Use horp template --help to show available actions.")
+        return later 1
+    }
+    var exit_code = process_templates_for_refs(
+        target_refs, result.args["action"]) later:
+
+    await exit_code
+    return later exit_code
 }
 

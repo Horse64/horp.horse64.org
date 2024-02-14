@@ -28,6 +28,7 @@
 import argparse from core.horse64.org
 import system from core.horse64.org
 
+import build.template
 import package
 import package.ref as ref
 import package.servermeta
@@ -67,7 +68,7 @@ func print_info_list_files(refs, limit_to_kind=none,
             "Obtaining file list for \"" +
             next_ref.package_name + "\"...")
     }
-    files = ref.print_files_list_from_ref(
+    result = ref.print_files_list_from_ref(
         next_ref, limit_to_kind=limit_to_kind,
         code_with_templates=code_with_templates,
         verbose=verbose
@@ -202,7 +203,6 @@ func actionparser_add(args, verbose=no) {
     print("Package refs: " + target_refs.as_str())
 }
 
-
 func main {
     var defs = new argparse.ArgumentDefs(
         program_name="horp",
@@ -229,6 +229,13 @@ func main {
         return return_code
     } elseif result.args["action"] == "info" {
         var return_code = actionparser_info(
+            result.args["action args"],
+            verbose=result.args["--verbose"]) later:
+
+        await return_code
+        return return_code
+    } elseif result.args["action"] == "template" {
+        var return_code = build.template.actionparser_template(
             result.args["action args"],
             verbose=result.args["--verbose"]) later:
 
