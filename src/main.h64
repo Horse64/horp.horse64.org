@@ -79,23 +79,21 @@ func actionparser_info(args, verbose=no) {
     var defs = argparse.ArgumentDefs(
         program_name="horp info", description="Show info about the given "
             "packages.")
+    defs.add_arg("action", description="Specify an action to execute, "
+        "available choices being: 1. \"general\" (show the general info), "
+        "2. \"files\" (list all files known to belong to the package), "
+        "3. \"code-files\" (list all code files of the package), "
+        "4. \"code-files-no-templates\" (list all code files, but "
+        "omit the code file templates).")
+    defs.add_switch("--filter", takes_arg=yes, description="For "
+        "the \"files\" action, filter for a specific type of file, "
+        "for example \"documentation files\".")
     defs.add_arg(
         "package refs", description="Package refs " +
         package_refs_explainer + " to print "
         "information about, like version, source location, etc.")
     defs.add_switch("--verbose", description="Output extra information "
         "when assembling the info.")
-    defs.add_switch("--list-files", description="Instead of more "
-        "general info, list all the files included in the package(s).")
-    defs.add_switch("--list-files-of-kind", takes_arg=yes,
-        description="Like "
-        "--list-files, but specify a kind of files to list, e.g. "
-        "\"documentation\".")
-    defs.add_switch("--list-code-files", description="Like "
-        "--list-files, but only list all code files with code templates.")
-    defs.add_switch("--list-code-files-without-templates",
-        description="Like "
-        "--list-files, but only list all code files excluding templates.")
     var result = argparse.parse(defs, args)
     if result.output != "" {
         print(result.output)
@@ -122,19 +120,16 @@ func actionparser_info(args, verbose=no) {
         var do_list_files = no
         var do_list_kind_of_file = none
         var do_exclude_templates_from_code= no
-        if result.args["--list-files"] {
+        if result.args["action"] == "files" {
             do_list_files = yes
-        }
-        if result.args["--list-files-of-kind"] != none {
-            do_list_files = yes
-            do_list_kind_of_file =
-                result.args["--list-files-of-kind"]
-        }
-        if result.args["--list-code-files"] {
+            filter = result.args["--filter"]
+            if filter != none and filter.len > 0 {
+                do_list_kind_of_file = filter
+            }
+        } elseif result.args["action"] == "code-files" {
             do_list_files = yes
             do_list_kind_of_file = "all code files"
-        }
-        if result.args["--list-code-files-without-templates"] {
+        } elseif result.args["action"] == "code-files-no-templates" {
             do_list_files = yes
             do_list_kind_of_file = "all code files"
             do_exclude_templates_from_code = yes
@@ -142,6 +137,7 @@ func actionparser_info(args, verbose=no) {
         if not do_list_files {
             return later none
         }
+        did_list_files = yes
         var exit_code = print_info_list_files(
             refs, limit_to_kind=do_list_kind_of_file,
             code_with_templates=
@@ -160,6 +156,12 @@ func actionparser_info(args, verbose=no) {
     await result
     if result != none {
         return result
+    }
+    if result.args["action"] != "general" {
+        print("horp: error: Encountered unknown action: " +
+            result.args["action"])
+        print("Use horp info --help to show the usage.")
+        return 1
     }
 
     # If we arrive here we weren't asked to do anything special,

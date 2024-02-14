@@ -26,11 +26,55 @@
 # license, see accompanied LICENSE.md.
 
 import argparse from core.horse64.org
+import confparse from core.horse64.org
 import path from core.horse64.org
 import uri from core.horse64.org
 
+import limit
 import package
 import package.ref as ref
+
+func apply_templates_from_conf_file(build_conf_path) {
+    var values = confparse.parse_from_file(
+        build_conf_path, allow_multiline=yes,
+        allow_multiassign=yes,
+        error_on_mistakes=no,
+        max_size=limit.conf_file_max_bytes,
+        allow_vfs=yes,
+        allow_disk=yes
+    ) later:
+
+    await values
+    if not values.has("build template") {
+        return later yes
+    }
+    var templates = {->}
+    for key in values["build template"] {
+        if key.ends(" template") {
+            var name = key.sub(1, key.len - " template".len)
+            name = name.trim()
+            if name.len > 0 {
+                templates[name] = {
+                    "file"-> values["build template"][key],
+                    "inputs"->none
+                }
+            }
+        }
+    }
+    for name in templates {
+        var inputs = []
+        if values["build template"].has(name + " template input") {
+            inputs = values["build template"][name + " template input"]
+        }
+        if typename(inputs) == "str" {
+            inputs = [inputs]
+        }
+        if inputs.len > 0 {
+            templates[name]["inputs"] = inputs
+        }
+    }
+    print("TEMPLATES: " + templates.as_str())
+}
 
 func process_templates_for_ref_unsafe(ref, action) {
     var where_uri = ref.location
@@ -45,8 +89,15 @@ func process_templates_for_ref_unsafe(ref, action) {
     var processed_any_template = no
     func callback(file_entry) {
         if action == "apply" and (
-                file_entry != "horp-build.conf" and
-                not file_entry.ends(path.sep + "horp-build.conf")) {
+                file_entry == "horp-build.conf" or
+                file_entry.ends(path.sep + "horp-build.conf")) {
+            var result = apply_templates_from_conf_file(
+                path.join(pkg_folder, file_entry)) later:
+
+            await result
+            if result == no {
+                return no
+            }
             return none
         } elseif action == "list" and
                 file_entry.len > ".tmpl".len and

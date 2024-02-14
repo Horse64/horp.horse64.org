@@ -296,7 +296,7 @@ func do_for_all_files(callback, package_dir,
                 }
             }
             if match_found {
-                file_list.append(entry)
+                file_list.append([entry, none])
             }
             continue
         }
@@ -314,6 +314,14 @@ func do_for_all_files(callback, package_dir,
             if wildcard.match(pattern, entry) {
                 file_confirmed_included = yes
                 break
+            }
+        }
+        if not file_confirmed_included {
+            for pattern in config_patterns {
+                if wildcard.match(pattern, entry) {
+                    file_confirmed_included = yes
+                    break
+                }
             }
         }
 
