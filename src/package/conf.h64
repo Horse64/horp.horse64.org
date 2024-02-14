@@ -59,55 +59,51 @@ func load_from_uri(conf_uri) {
         result.values["package"] = {->}
     }
 
-    var code_patterns = []
-    if result.values.has("package") and
-            result.values["package"].has("code files") and
-            typename(result.values["package"]["code files"]) == "str" {
-        var patterns = result.values["package"]["code files"].split(",")
-        for pattern in patterns {
-            pattern = pattern.trim()
-            if pattern.len > 0 {
-                code_patterns.add(pattern)
+    var expandable_patterns = {
+        "code files": ["*.h64"],
+        "documentation files":
+            ["docs/**", "README.md", "/CONTRIBUTING.md"],
+        "license files": ["LICENSE.md", "LICENSE.txt"],
+        "extra files": ["/AUTHORS.md"]
+    }
+    for epatterns in expandable_patterns.keys() {
+        var all_epatterns = none
+        if result.values.has("package") {
+            var all_keys = result.values["package"].keys()
+            for key in all_keys {
+                if key != epatterns and not key.ends(" " + epatterns) {
+                    continue
+                }
+                if typename(result.values["package"][key]) == "str" {
+                    if all_epatterns == none {
+                        all_epatterns = []
+                    }
+                    var found_patterns = []
+                    var patterns = result.values["package"][key].split(",")
+                    for pattern in patterns {
+                        pattern = pattern.trim()
+                        if pattern.len > 0 {
+                            found_patterns.add(pattern)
+                            if not all_epatterns.has(pattern) {
+                                all_epatterns.add(pattern)
+                            }
+                        }
+                    }
+                    if key == epatterns {
+                        key = "main " + epatterns
+                        result.values["package"].del(epatterns)
+                    }
+                    result.values["package"][key] = found_patterns
+                } else {
+                    result.values["package"].del(key)
+                }
             }
         }
-    } else {
-        code_patterns = ["**.h64"]
-    }
-    result.values["package"]["code files"] = code_patterns
-
-    var doc_file_patterns = []
-    if result.values.has("package") and
-            result.values["package"].has("documentation files") and
-            typename(result.values["package"]
-                     ["documentation files"]) == "str" {
-        var patterns = result.values["package"]
-            ["documentation files"].split(",")
-        for pattern in patterns {
-            pattern = pattern.trim()
-            if pattern.len > 0 {
-                doc_file_patterns.add(pattern)
-            }
+        if all_epatterns == none {
+            all_epatterns = expandable_patterns[epatterns].copy()
         }
-    } else {
-        doc_file_patterns = ["docs/**", "README.md", "/CONTRIBUTING.md"]
+        result.values["package"]["all " + epatterns] = all_epatterns
     }
-    result.values["package"]["documentation files"] = doc_file_patterns
-
-    var extra_file_patterns = []
-    if result.values.has("package") and
-            result.values["package"].has("extra files") and
-            typename(result.values["package"]["extra files"]) == "str" {
-        var patterns = result.values["package"]["extra files"].split(",")
-        for pattern in patterns {
-            pattern = pattern.trim()
-            if pattern.len > 0 {
-                extra_file_patterns.add(pattern)
-            }
-        }
-    } else {
-        extra_file_patterns = ["/AUTHORS.md"]
-    }
-    result.values["package"]["extra files"] = extra_file_patterns
 
     var exclude_file_patterns = []
     if result.values.has("package") and
@@ -125,22 +121,6 @@ func load_from_uri(conf_uri) {
     }
     result.values["package"]["exclude files"] = exclude_file_patterns
 
-    var license_file_patterns = []
-    if result.values.has("package") and
-            result.values["package"].has("license files") and
-            typename(result.values["package"]["license files"]) == "str" {
-        var patterns = result.values["package"]["license files"].split(",")
-        for pattern in patterns {
-            pattern = pattern.trim()
-            if pattern.len > 0 {
-                license_file_patterns.add(pattern)
-            }
-        }
-    } else {
-        license_file_patterns = ["LICENSE.md", "LICENSE.txt"]
-    }
-    result.values["package"]["license files"] = license_file_patterns
-
     return result
 }
 
@@ -149,7 +129,7 @@ func load_from_file(package_dir, allow_disk=yes, allow_vfs=yes) {
         throw new io.PathNotFoundError("File not found.")
     }
     var conf_path = path.join(package_dir, "horp.conf")
-    var exists_in_vfs = io.exists(package_dir, allow_disk=no,
+    var exists_in_vfs = io.exists(conf_path, allow_disk=no,
         allow_vfs=allow_vfs) later:
 
     await exists_in_vfs

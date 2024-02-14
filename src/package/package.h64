@@ -26,7 +26,6 @@
 # license, see accompanied LICENSE.md.
 
 import io from core.horse64.org
-import path from core.horse64.org
 import text from core.horse64.org
 import wildcard from core.horse64.org
 
@@ -84,15 +83,18 @@ func normalize_package_name(h) {
 ##     If the callback returns the bool value `no`, then the
 ##     iteration over the files will abort. If it returns
 ##     anything else, it will continue to the end.
-## @param skip_meta_files Whether to skip meta files like
-##     horp.conf or template files, or whether to include them.
-##     Pure documentation files with no build-relevant code or
-##     config contents are always skipped, e.g. LICENSE.md is
-##     always skipped.
+## @param limit_to_kind The type of files as listed in the
+##     package config to list for, if not just all files.
+##     To get any code files of any kind, set it to the
+##     literal string value "all code files".
+## @param code_with_templates When listing code only, whether
+##     to include any templated code files. Defaults to yes.
 ## @returns yes if the iteration fully completed, no if it
 ##     aborted due to the callback returning no.
 func do_for_all_files(callback, package_dir,
-        skip_meta_files=yes, allow_vfs=yes, allow_disk=yes) {
+        limit_to_kind=none,
+        code_with_templates=yes, allow_vfs=yes, allow_disk=yes,
+        verbose=no) {
 
     func do_for_all_files_in_sublist(l) {
         for entry in l {
@@ -104,31 +106,118 @@ func do_for_all_files(callback, package_dir,
         return yes
     }
 
+    if verbose {
+        print("horp: verbose: do_for_all_files(): "
+            "Called with parameters limit_to_kind=" +
+            limit_to_kind.as_str() +
+            ", code_with_templates=" +
+            code_with_templates.as_str())
+    }
+
     var conf = package.conf.load_from_file(
         package_dir, allow_vfs=allow_vfs, allow_disk=allow_disk
     ) later:
 
     await conf
-    var code_patterns = conf.values["package"]["code files"]
-    var extra_patterns = conf.values["package"]["extra files"]
-    var exclude_patterns = conf.values["package"]["exclude files"]
-    var license_patterns = conf.values["package"]["license files"]
-    var meta_file_patterns = ["horp.conf", "horp-build.conf"] +
-        conf.values["package"]["documentation files"]
+
+    # See what sort of code we want to scan for, if any:
+    var code_patterns = conf.values["package"]["all code files"]
     code_patterns =
         wildcard.transform_list_for_rel_paths(code_patterns)
-    extra_patterns =
-        wildcard.transform_list_for_rel_paths(extra_patterns)
+    var listing_only_code = no
+    if limit_to_kind != none {
+        if limit_to_kind == "code files" or
+                limit_to_kind.ends(" code files") {
+            listing_only_code = yes
+            if limit_to_kind == "code files" {
+                limit_to_kind = "all code files"
+            }
+            code_patterns = []
+            if conf.values["package"].has(limit_to_kind) {
+                code_patterns = wildcard.transform_list_for_rel_paths(
+                    conf.values["package"][limit_to_kind])
+            }
+        } else {
+            listing_only_code = no
+            code_with_templates = yes
+        }
+    } else {
+        code_with_templates = yes
+    }
+
+    # Collect all other patterns:
+    var exclude_patterns = conf.values["package"]["exclude files"]
     exclude_patterns =
         wildcard.transform_list_for_rel_paths(exclude_patterns)
-    license_patterns =
-        wildcard.transform_list_for_rel_paths(license_patterns)
-    meta_file_patterns =
-        wildcard.transform_list_for_rel_paths(meta_file_patterns)
+    var known_misc_file_pattern_names = [
+        "extra files", "license files",
+        "documentation files"
+    ]
+    var all_noncode_patterns = []
+    for misc_pattern in known_misc_file_pattern_names {
+        if not conf.values["package"].has("all " + misc_pattern) {
+            continue
+        }
+        patterns = conf.values["package"]["all " + misc_pattern]
+        patterns =
+            wildcard.transform_list_for_rel_paths(patterns)
+        all_noncode_patterns += patterns
+    }
+    var config_patterns = ["horp.conf", "horp-build.conf"]
+    config_patterns =
+        wildcard.transform_list_for_rel_paths(config_patterns)
 
+    # If we're not limiting to code, check what we want to limit to:
+    var limited_to_noncode_patterns = none
+    var listing_excludes_code = no
+    if limit_to_kind != none and not listing_only_code {
+        listing_excludes_code = yes
+        limited_to_noncode_patterns = []
+        if not limit_to_kind.ends(" files") {
+            limit_to_kind += " files"
+        }
+        if not limit_to_kind.starts("all ") and
+                conf.values["package"].has("all " + limit_to_kind) {
+            limited_to_noncode_patterns =
+                conf.values["package"]["all " + limit_to_kind]
+        } else {
+            if conf.values["package"].has(limit_to_kind) {
+                limited_to_noncode_patterns =
+                    conf.values["package"][limit_to_kind]
+            }
+        }
+        limited_to_noncode_patterns =
+            wildcard.transform_list_for_rel_paths(
+                limited_to_noncode_patterns)
+    }
+    if verbose {
+        print("horp: verbose: do_for_all_files(): "
+            "Will proceed with following computed values: " +
+            "listing_excludes_code=" +
+            listing_excludes_code.as_str() + ", "
+            "listing_only_code=" +
+            listing_only_code.as_str() + ", "
+            "limited_to_noncode_patterns=" +
+            limited_to_noncode_patterns.as_str() + ", "
+            "exclude_patterns=" +
+            exclude_patterns.as_str() + ", "
+            "code_with_templates=" +
+            code_with_templates.as_str() + ", "
+            "code_patterns=" +
+            code_patterns.as_str() + ", "
+            "all_noncode_patterns=" +
+            all_noncode_patterns.as_str() + "."
+        )
+    }
+    if limited_to_noncode_patterns != none and
+            limited_to_noncode_patterns.len == 0 {
+        return yes
+    }
+
+    # Now start actually looking for the files:
     var walker = io.tree_list_walker(
         package_dir, relative=yes, return_dirs=no,
-        exclude_dot_names=yes, exclude_dir_names=[],
+        exclude_dot_names=yes, exclude_dir_names=["horse_modules"],
         allow_vfs=allow_vfs, allow_disk=allow_disk)
 
     var entries = walker.walk() later:
@@ -151,55 +240,59 @@ func do_for_all_files(callback, package_dir,
             continue
         }
 
-        # Check if this is a meta file:
-        var file_is_meta = (
-            entry.ends(".tmpl")
-        )
-        var explicit_meta_match = no
-        for pattern in meta_file_patterns {
-            if wildcard.match(pattern, entry) {
-                explicit_meta_match = yes
-                break
-            }
-        }
-        if not explicit_meta_match {
-            for pattern in license_patterns {
-                if wildcard.match(pattern, entry) {
-                    explicit_meta_match = yes
-                    break
-                }
-            }
-        }
-
-        # Bail if we don't want meta files and it is one:
-        if skip_meta_files and file_is_meta {
-            continue
-        }
-
-        # Check if this matches a code file:
-        var match_found = explicit_meta_match
-        if not match_found {
-            for pattern in code_patterns {
+        # Handle returning a specific non-code kind of pattern:
+        if listing_excludes_code {
+            assert(limited_to_noncode_patterns != none)
+            var match_found = none
+            for pattern in limited_to_noncode_patterns {
                 if wildcard.match(pattern, entry) {
                     match_found = yes
                     break
                 }
             }
-            if not match_found and not skip_meta_files and
-                    entry.ends(".tmpl") {
-                var name_without_tmpl =
-                    entry.sub(1, entry.len - ".tmpl".len)
-                if entry.len > 0 and not entry.ends(path.sep) {
-                    for pattern in code_patterns {
-                        if wildcard.match(pattern, entry) {
-                            match_found = yes
-                            break
-                        }
-                    }
-                }
+            if match_found {
+                file_list.append(entry)
+            }
+            continue
+        }
+
+        # Check if this is a meta file:
+        var file_is_template = (
+            entry.len > ".tmpl".len and
+            entry.ends(".tmpl")
+        )
+        if file_is_template and not code_with_templates {
+            continue
+        }
+        var file_confirmed_included = no
+        for pattern in all_noncode_patterns {
+            if wildcard.match(pattern, entry) {
+                file_confirmed_included = yes
+                break
             }
         }
-        if match_found {
+
+        # Check if this matches a code file:
+        if not file_confirmed_included or
+                listing_only_code {
+            var is_code_or_templated_code = no
+            for pattern in code_patterns {
+                if not file_is_template {
+                    if wildcard.match(pattern, entry) {
+                        is_code_or_templated_code = yes
+                        break
+                    }
+                } elseif file_is_template and
+                        wildcard.match(pattern,
+                            entry.sub(1, entry.len - ".tmpl".len)) {
+                    is_code_or_templated_code = yes
+                    break
+                }
+            }
+            assert(not file_is_template or code_with_templates)
+            file_confirmed_included = is_code_or_templated_code
+        }
+        if file_confirmed_included {
             file_list.append(entry)
         }
     }

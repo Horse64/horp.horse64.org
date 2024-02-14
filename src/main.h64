@@ -35,7 +35,8 @@ import package.servermeta
 var package_refs_explainer = "(e.g. a package name, "
     "or dir path to a package's local source directory)"
 
-func print_info_list_files(refs, verbose=no) {
+func print_info_list_files(refs, limit_to_kind=none,
+        code_with_templates=no, verbose=no) {
     var queue = refs.copy()
 
     var next_ref = queue.pop()
@@ -45,7 +46,9 @@ func print_info_list_files(refs, verbose=no) {
             next_ref.package_name + "\"...")
     }
     var result = ref.print_files_list_from_ref(
-        next_ref) later:
+        next_ref, limit_to_kind=limit_to_kind,
+        code_with_templates=code_with_templates,
+        verbose=verbose) later:
 
     await files
     if not result {
@@ -65,7 +68,10 @@ func print_info_list_files(refs, verbose=no) {
             next_ref.package_name + "\"...")
     }
     files = ref.print_files_list_from_ref(
-        next_ref) later repeat
+        next_ref, limit_to_kind=limit_to_kind,
+        code_with_templates=code_with_templates,
+        verbose=verbose
+    ) later repeat
 }
 
 func actionparser_info(args, verbose=no) {
@@ -80,6 +86,15 @@ func actionparser_info(args, verbose=no) {
         "when assembling the info.")
     defs.add_switch("--list-files", description="Instead of more "
         "general info, list all the files included in the package(s).")
+    defs.add_switch("--list-files-of-kind", takes_arg=yes,
+        description="Like "
+        "--list-files, but specify a kind of files to list, e.g. "
+        "\"documentation\".")
+    defs.add_switch("--list-code-files", description="Like "
+        "--list-files, but only list all code files with code templates.")
+    defs.add_switch("--list-code-files-without-templates",
+        description="Like "
+        "--list-files, but only list all code files excluding templates.")
     var result = argparse.parse(defs, args)
     if result.output != "" {
         print(result.output)
@@ -103,15 +118,38 @@ func actionparser_info(args, verbose=no) {
 
     # Helper functions to execute detailed info requests if any:
     func print_info_list_files_if_needed(refs, verbose=no) {
-        if not result.args["--list-files"] {
-            return none
+        var do_list_files = no
+        var do_list_kind_of_file = none
+        var do_exclude_templates_from_code= no
+        if result.args["--list-files"] {
+            do_list_files = yes
+        }
+        if result.args["--list-files-of-kind"] != none {
+            do_list_files = yes
+            do_list_kind_of_file =
+                result.args["--list-files-of-kind"]
+        }
+        if result.args["--list-code-files"] {
+            do_list_files = yes
+            do_list_kind_of_file = "all code files"
+        }
+        if result.args["--list-code-files-without-templates"] {
+            do_list_files = yes
+            do_list_kind_of_file = "all code files"
+            do_exclude_templates_from_code = yes
+        }
+        if not do_list_files {
+            return later none
         }
         var exit_code = print_info_list_files(
-            refs, verbose=verbose
+            refs, limit_to_kind=do_list_kind_of_file,
+            code_with_templates=
+                not do_exclude_templates_from_code,
+            verbose=verbose
         ) later:
 
         await exit_code
-        return exit_code
+        return later exit_code
     }
 
     # Figure out what info we should actually provide:
