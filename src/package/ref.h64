@@ -27,6 +27,7 @@
 
 import confparse from core.horse64.org
 import io from core.horse64.org
+import math from core.horse64.org
 import net from core.horse64.org
 import path from core.horse64.org
 import system from core.horse64.org

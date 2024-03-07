@@ -27,14 +27,122 @@
 
 import argparse from core.horse64.org
 import confparse from core.horse64.org
+import io from core.horse64.org
+import json from core.horse64.org
 import path from core.horse64.org
+import textfmt from core.horse64.org
 import uri from core.horse64.org
 
 import limit
 import package
 import package.ref as ref
 
-func apply_templates_from_conf_file(build_conf_path) {
+func get_variables_for_template(template_path, template_settings) {
+    var result = {->}
+    var template_folder = path.dirname(template_path)
+    var queue = template_settings["inputs"]
+    if queue == none or queue.len == 0 {
+        return result
+    }
+
+    # Load up all input files from which we feed our template data:
+    var next_entry = queue.pop()
+    var fexists = io.exists(path.join(
+        template_settings["project-root"],
+        next_entry
+    )) later:
+
+    await fexists
+    if not fexists {
+        return later no
+    }
+    var f = io.open(path.join(
+        template_settings["project-root"],
+        next_entry
+    ), "r") later:
+
+    await f
+    var contents
+    contents = f.read() later:
+
+    await contents
+    f.close()
+
+    # Parse the actual variables inside:
+    var var_obj = json.parse(contents)
+    if typename(var_obj) == "map" {
+        for key in var_obj {
+            result[key] = var_obj[key]
+        }
+    } else {
+        return later no
+    }
+
+    # If we're done with all input files, stop here:
+    if queue == none or queue.len == 0 {
+        return result
+    }
+
+    # Otherwise continue:
+    next_entry = queue.pop()
+    fexists = io.exists(path.join(
+        template_settings["project-root"],
+        next_entry
+    )) later repeat
+}
+
+func apply_single_template(
+        template_path, template_settings, verbose=verbose
+        ) {
+    var variables = get_variables_for_template(
+        template_path, template_settings) later:
+
+    await variables
+    if variables == no {
+        return later no
+    }
+    var template_contents = none
+    var f = io.open(template_path, "r") later:
+
+    await f
+    template_contents = f.read() later:
+
+    await template_contents
+    f.close()
+
+    var target_file_path = template_settings["target-path"]
+    if verbose {
+        print("horp: verbose: apply_single_template(): "
+            "Rendering to target: " + target_file_path)
+    }
+    var render_result
+    do {
+        render_result = textfmt.template_from_str(
+            template_contents).apply(variables)
+    } rescue any {
+        render_result = no
+    }
+    if render_result == no {
+        return later no
+    }
+    f = io.open(target_file_path, "w") later:
+
+    await f
+    f.write(render_result) later:
+
+    f.close()
+    return later yes
+}
+
+func apply_templates_from_conf_file(
+        project_base_path,
+        build_conf_path, build_conf_project_rel_path,
+        verbose=no
+        ) {
+    if verbose {
+        print("horp: verbose: apply_templates_from_conf_file(): "
+            "Parsing build conf file at: " + build_conf_path)
+    }
     var values = confparse.parse_from_file(
         build_conf_path, allow_multiline=yes,
         allow_multiassign=yes,
@@ -45,6 +153,7 @@ func apply_templates_from_conf_file(build_conf_path) {
     ) later:
 
     await values
+    var build_conf_folder = path.dirname(build_conf_path)
     if not values.has("build template") {
         return later yes
     }
@@ -53,14 +162,29 @@ func apply_templates_from_conf_file(build_conf_path) {
         if key.ends(" template") {
             var name = key.sub(1, key.len - " template".len)
             name = name.trim()
-            if name.len > 0 {
-                templates[name] = {
-                    "file"-> values["build template"][key],
-                    "inputs"->none
-                }
+            if name.len == 0 {
+                return later no
             }
+            var tmpl = {
+                "src-path"-> path.normalize(path.join(build_conf_folder,
+                    path.normalize(values["build template"][key]))),
+                "project-root"->project_base_path,
+                "inputs"->[]
+            }
+            if not tmpl["src-path"].ends(".tmpl") {
+                return later no  # This isn't allowed.
+            }
+            tmpl["target-path"] = tmpl["src-path"].sub(
+                1, tmpl["src-path"].len - ".tmpl".len
+            )
+            if tmpl["target-path"].ends(path.sep) or
+                    tmpl["target-path"].len == 0 {
+                return later no
+            }
+            templates[name] = tmpl
         }
     }
+    var queue = []
     for name in templates {
         var inputs = []
         if values["build template"].has(name + " template input") {
@@ -70,13 +194,43 @@ func apply_templates_from_conf_file(build_conf_path) {
             inputs = [inputs]
         }
         if inputs.len > 0 {
-            templates[name]["inputs"] = inputs
+            fixed_inputs = []
+            for input_src in inputs {
+                assert(not path.is_abs(build_conf_project_rel_path))
+                fixed_inputs.add(path.join(path.dirname(
+                    build_conf_project_rel_path), input_src
+                ))
+            }
+            templates[name]["inputs"] = fixed_inputs
         }
+        queue.add(templates[name])
     }
-    print("TEMPLATES: " + templates.as_str())
+    if queue.len == 0 {
+        return later yes
+    }
+    var next_template = queue.pop()
+    var result = apply_single_template(
+        next_template["src-path"], next_template,
+        verbose=verbose
+    ) later:
+
+    await result
+    if not result {
+        return later no
+    }
+    if queue.len == 0 {
+        return later yes
+    }
+    next_template = queue.pop()
+    result = apply_single_template(
+        next_template["src-path"], next_template,
+        verbose=verbose
+    ) later repeat
 }
 
-func process_templates_for_ref_unsafe(ref, action) {
+func process_templates_for_ref_unsafe(
+        ref, action, verbose=no
+        ) {
     var where_uri = ref.location
     var where_prot = uri.get_protocol(where_uri)
     if not {"file", "vfs"}.has(where_prot.lower()) {
@@ -92,7 +246,10 @@ func process_templates_for_ref_unsafe(ref, action) {
                 file_entry == "horp-build.conf" or
                 file_entry.ends(path.sep + "horp-build.conf")) {
             var result = apply_templates_from_conf_file(
-                path.join(pkg_folder, file_entry)) later:
+                path.make_abs(pkg_folder),
+                path.join(pkg_folder, file_entry),
+                file_entry, verbose=verbose
+            ) later:
 
             await result
             if result == no {
@@ -114,9 +271,16 @@ func process_templates_for_ref_unsafe(ref, action) {
 
     await success
     if not success {
-        print("horp: error: File listing failed, "
-            "is this package accessible on disk? For package: " +
-            ref.as_str())
+        if action == "apply" {
+            print("horp: error: Applying templates failed, "
+                "either templates are malformed or "
+                "there was a disk access error. For package: " +
+                ref.as_str())
+        } else {
+            print("horp: error: File listing failed, "
+                "is this package accessible on disk? For package: " +
+                ref.as_str())
+        }
         return later no
     }
     if not processed_any_template and action == "list" {
@@ -125,10 +289,11 @@ func process_templates_for_ref_unsafe(ref, action) {
     return later yes
 }
 
-func process_templates_for_ref(ref, action) {
+func process_templates_for_ref(ref, action, verbose=no) {
     do {
-        var result = process_templates_for_ref_unsafe(ref, action)
-        later:
+        var result = process_templates_for_ref_unsafe(
+            ref, action, verbose=verbose
+        ) later:
 
         await result
         if not result {
@@ -143,14 +308,15 @@ func process_templates_for_ref(ref, action) {
     return yes
 }
 
-func process_templates_for_refs(refs, action) {
+func process_templates_for_refs(refs, action, verbose=no) {
     var queue = refs.copy()
     if queue.len == 0 {
         return 0
     }
-    var next_ref = refs.pop()
-    var build_result = process_templates_for_ref(next_ref, action)
-    later:
+    var next_ref = queue.pop()
+    var build_result = process_templates_for_ref(
+        next_ref, action, verbose=verbose
+    ) later:
 
     await build_result
     if not build_result {
@@ -160,7 +326,7 @@ func process_templates_for_refs(refs, action) {
     if queue.len == 0 {
         return 0
     }
-    next_ref = refs.pop()
+    next_ref = queue.pop()
     build_result = process_templates_for_ref(
         next_ref
     ) later repeat
@@ -197,6 +363,7 @@ func actionparser_template(args, verbose=no) {
         print("horp: error: Failed to resolve package refs: " +
             err.msg)
         print("Did you specify existing horp packages?")
+        return 1
     }
     if not {"apply", "list"}.has(result.args["action"]) {
         print("horp: error: Unknown action \"" +
@@ -205,7 +372,8 @@ func actionparser_template(args, verbose=no) {
         return later 1
     }
     var exit_code = process_templates_for_refs(
-        target_refs, result.args["action"]) later:
+        target_refs, result.args["action"], verbose=verbose
+    ) later:
 
     await exit_code
     return later exit_code

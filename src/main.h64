@@ -211,10 +211,11 @@ func main {
         description="Horp is the official Horse64 package manager. "
             "Use it to get and upgrade additional libraries and tools.")
     defs.add_arg("action", description="Pick an available actions: "
-        "add, info, del. To see details for an action, use it with "
-        "--help.\nE.g.: horp add --help")
+        "add, del, info, template. "
+        "To see details for an action, use it with "
+        "--help to get more info.\nE.g.: horp add --help")
     defs.add_catchall("action args", description="List of "
-        "arguments for the specified action")
+        "arguments for the specified action.")
     defs.add_switch("--verbose", description="Output extra information "
         "when doing things.")
     var result = argparse.parse(defs)
@@ -239,7 +240,8 @@ func main {
     } elseif result.args["action"] == "template" {
         var return_code = build.template.actionparser_template(
             result.args["action args"],
-            verbose=result.args["--verbose"]) later:
+            verbose=result.args["--verbose"]
+        ) later:
 
         await return_code
         return return_code
