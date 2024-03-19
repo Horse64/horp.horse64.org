@@ -258,8 +258,8 @@ func main {
 
         await return_code
         return return_code
-    } elseif result.args["action"] == "template" {
-        var return_code = build.template.actionparser_template(
+    } elseif result.args["action"] == "build" {
+        var return_code = build.actionparser_build(
             result.args["action args"],
             verbose=result.args["--verbose"]
         ) later:

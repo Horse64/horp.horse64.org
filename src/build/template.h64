@@ -1,4 +1,4 @@
-## @module template
+## @module build.template
 # Copyright (c) 2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
@@ -332,8 +332,8 @@ func process_templates_for_refs(refs, action, verbose=no) {
     ) later repeat
 }
 
-func actionparser_template(args, verbose=no) {
-    var defs = argparse.ArgumentDefs(program_name="horp template",
+func actionparser_build_template(args, verbose=no) {
+    var defs = argparse.ArgumentDefs(program_name="horp build template",
         description="Instead of running the full build actions, "
         "just run the templating build step on the given package "
         "directory.")
@@ -368,7 +368,8 @@ func actionparser_template(args, verbose=no) {
     if not {"apply", "list"}.has(result.args["action"]) {
         print("horp: error: Unknown action \"" +
             result.args["action"] + "\".")
-        print("Use horp template --help to show available actions.")
+        print("Use horp build template --help to "
+            "show available actions.")
         return later 1
     }
     var exit_code = process_templates_for_refs(

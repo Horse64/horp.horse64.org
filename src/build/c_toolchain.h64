@@ -1,0 +1,352 @@
+## @module build.c_toolchain
+# Copyright (c) 2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Alternatively, at your option, this file is offered under the Apache 2
+# license, see accompanied LICENSE.md.
+
+import argparse from core.horse64.org
+import io from core.horse64.org
+import path from core.horse64.org
+import process from core.horse64.org
+import system from core.horse64.org
+
+import package.ref as ref
+
+type CToolchain {
+    var cc_compiler_path
+    var cxx_compiler_path
+    var ar_tool_path
+
+    var toolchain_base = none
+    var known_library_ext = none
+}
+
+func CToolchain.init(
+        cc_compiler_path,
+        cxx_compiler_path=none,
+        ar_tool_path=none
+        ) {
+    if typename(cc_compiler_path) != "str" {
+        throw new TypeError("CC compiler path must be an str.")
+    }
+    self.cc_compiler_path = cc_compiler_path
+    self.cxx_compiler_path = cxx_compiler_path
+    self.ar_tool_path = ar_tool_path
+    var base_candidate = self.cc_compiler_path
+    if base_candidate.ends(".bin") or
+            base_candidate.ends(".exe") {
+        var idx = base_candidate.rfind(".")
+        base_candidate = base_candidate.sub(
+            1, idx - 1
+        )
+    }
+    if base_candidate.ends("-gcc") {
+        base_candidate = base_candidate.sub(
+            1, base_candidate.len - len("-gcc")
+        )
+    } elseif base_candidate.ends("-cc") {
+        base_candidate = base_candidate.sub(
+            1, base_candidate.len - len("-cc")
+        )
+    } elseif path.basename(base_candidate) == "gcc" and
+            path.basename(base_candidate) == "cc" {
+        if self.cxx_compiler_path == none {
+            if path.basename(base_candidate) == "gcc" {
+                self.cxx_compiler_path = "g++"
+            } else {
+                self.cxx_compiler_path = "c++"
+            }
+        }
+        if self.ar_tool_path == none {
+            self.ar_tool_path = "ar"
+        }
+    } else {
+        base_candidate = none
+    }
+    self.toolchain_base = base_candidate
+    if self.toolchain_base != none {
+        if self.cxx_compiler_path == none {
+            self.cxx_compiler_path = self.toolchain_base + "-g++"
+        }
+        if self.ar_tool_path == none {
+            self.ar_tool_path = self.ar_tool_path + "-ar"
+        }
+    }
+}
+
+func CToolchain.detect_info {
+    var ext = self.check_library_extension() later:
+
+    await ext
+    self.known_library_ext = ext
+}
+
+func CToolchain.check_library_extension {
+    var known_ext = none
+
+    # Try .dylib file extension:
+    var success = self.test_run_in_dir(
+        self.cc_compiler_path, args=[
+            "-dynamiclib", "-undefined", "dynamic_lookup",
+            "-o", "test.dylib",
+            "test.c"
+        ],
+        test_file_contents=("#if !defined(__APPLE__)\n"
+            "#error \"Not any macOS or iOS target\"\n"
+            "#endif\n"
+            "#include <stdio.h>\n"
+            "int test() {return 5;}"),
+        result_file_name="test.dylib"
+    ) later:
+    
+    await success
+    if success {
+        known_ext = ".dylib"
+        return later known_ext
+    }
+
+    # Try .dll file extension:
+    var success = self.test_run_in_dir(
+        self.cc_compiler_path, args=[
+            "-shared", "-o", "libtest.dll",
+            "test.c",
+            "-Wl,--out-implib,libtest_dll.a"
+        ],
+        test_file_contents=("#include <windows.h>\n"
+            "int test() {return 5;}"),
+        result_file_name="libtest.dll"
+    ) later:
+    
+    await success
+    if success {
+        known_ext = ".dll"
+        return later known_ext
+    }
+
+    # Try .so file extension:
+    var success = self.test_run_in_dir(
+        self.cc_compiler_path, args=[
+            "-shared", "-o", "libtest.so",
+            "test.c"
+        ],
+        test_file_contents=("#include <stdio.h>\n"
+            "int test() {return 5;}"),
+        result_file_name="libtest.so"
+    ) later:
+    
+    await success
+    if success {
+        known_ext = ".so"
+        return later known_ext
+    }
+
+    return later none
+}
+    
+func CToolchain.test_run_in_dir(
+        cmd, args=[], test_file_name="test.c",
+        test_file_contents=none,
+        result_file_name=none,
+        result_output_str=none) {
+    if typename(cmd) != "str" {
+        throw new TypeError(
+            "The cmd supplied must be an str."
+        )
+    }
+    if typename(args) != "list" {
+        throw new TypeError(
+            "The args supplied must be a list of str values."
+        )
+    }
+    if typename(test_file_contents) != "str" {
+        throw new TypeError(
+            "You must supply test_file_contents as an str."
+        )
+    }
+    if typename(result_file_name) != "str" and
+            typename(result_output_str) != "str" {
+        throw new TypeError(
+            "You must supply either result_file_name or "
+            "result_output_str as an str."
+        )
+    }
+    var file_obj = none
+    var test_dir = io.make_tmpdir(
+        prefix="horp-c_toolchain-test-"
+    ) later:
+
+    await test_dir
+    func do_test {
+        file_obj = io.open(
+            path.join(test_dir, test_file_name), "w"
+        ) later:
+        
+        await file_obj
+        file_obj.write(test_file_contents) later:
+
+        file_obj.close()
+
+        file_obj = none
+        var output = process.run(cmd, args=args,
+            run_in_dir=test_dir,
+            error_on_nonzero_exit_code=no)
+        later:
+
+        await output
+        if result_file_name != none {
+            var exists = io.exists(path.join(
+                test_dir, result_file_name
+            )) later:
+
+            await exists
+            io.remove_dir(test_dir) later:
+            return later exists
+        }
+        assert(result_output_str != none)
+        io.remove_dir(test_dir) later:
+        return later output.find(result_output_str) != none
+    }
+    do {
+        var result = do_test() later:
+
+        await result
+        return later result
+    } rescue any as e {
+        #io.remove_dir(
+        #    test_dir
+        #) later ignore  # FIXME. Translator breaks.
+        if file_obj != none {
+            file_obj.close()
+        }
+        return no
+    }
+}
+
+func process_show_info_for_refs(refs, verbose=no) {
+    func show_c_toolchain_info_for_ref(ref, verbose=verbose) {
+        var cc_default = process.get_env("CC")
+        if cc_default == none {
+            if system.osname.lower() == "windows" {
+                cc_default = "gcc.exe"
+            } else {
+                cc_default = "gcc"
+            }
+        }
+        var ctool = new CToolchain(cc_default)
+        ctool.detect_info() later:
+
+        var ref_name = if ref.package_name != none
+            (ref.package_name + " at ") else
+            ("package at ") + ref.location
+        if ref_name.len > 50 {
+            ref_name = "..." + ref_name.sub(
+                ref_name.len - 50
+            )
+        }
+        heading = "C toolchain info for " + ref_name
+        print(heading)
+        print("=".rep(heading.glyph_len))
+        print("")
+        print("C compiler detected: " +
+            ctool.cc_compiler_path.as_str())
+        print("C++ compiler detected: " +
+            ctool.cxx_compiler_path.as_str())
+        print("AR tool detected: " +
+            ctool.ar_tool_path.as_str())
+        print("Library extensions detected: " +
+            ctool.known_library_ext.as_str())
+        return later
+    }
+    var queue = refs.copy()
+    if queue.len == 0 {
+        return 0
+    }
+    var next_ref = queue.pop()
+    var result = show_c_toolchain_info_for_ref(
+        next_ref, verbose=verbose
+    ) later:
+
+    await result
+    if not result {
+        return 1
+    }
+
+    if queue.len == 0 {
+        return 0
+    }
+    next_ref = queue.pop()
+    result = show_c_toolchain_info_for_ref(
+        next_ref, verbose=verbose
+    ) later repeat
+}
+
+func actionparser_build_c_toolchain(args, verbose=no) {
+    var defs = argparse.ArgumentDefs(
+        program_name="horp build c_toolchain",
+        description="Run the build, or output info about "
+        "the build.")
+    defs.add_arg("action", description="Specify an action to execute, "
+        "available choices being \"show\" (detect and output "
+        "info about C toolchain available).")
+    defs.add_arg(
+        "package refs", description="The packages for which "
+        "to handle the templates.")
+    defs.add_switch("--verbose", description="Output extra information "
+        "when doing things.")
+    var result = argparse.parse(defs, args)
+    if result.output != "" {
+        print(result.output)
+        return later result.exit_code
+    }
+    if result.args["--verbose"] {
+        verbose = yes
+    }
+    var target_refs = ref.parse_and_populate_package_refs(
+        result.args["package refs"], verbose=verbose
+    ) later:
+
+    do {
+        await target_refs
+    } rescue any as err {
+        print("horp: error: Failed to resolve package refs: " +
+            err.msg)
+        print("Did you specify existing horp packages?")
+        return 1
+    }
+    if not {"show"}.has(result.args["action"]) {
+        print("horp: error: Unknown action \"" +
+            result.args["action"] + "\".")
+        print("Use horp build c_toolchain --help "
+            "to show available actions.")
+        return later 1
+    }
+    assert(result.args["action"] == "show")
+    var exit_code = process_show_info_for_refs(
+        target_refs, verbose=verbose
+    ) later:
+
+    await exit_code
+    return later exit_code
+}
+
