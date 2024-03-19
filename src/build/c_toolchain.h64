@@ -39,16 +39,29 @@ type CToolchain {
     var ar_tool_path
 
     var toolchain_base = none
-    var known_library_ext = none
+    var known_shared_lib_ext = none
+    var known_shared_lib_flags = none
 }
 
 func CToolchain.init(
-        cc_compiler_path,
+        cc_compiler_path=none,
         cxx_compiler_path=none,
         ar_tool_path=none
         ) {
-    if typename(cc_compiler_path) != "str" {
+    if typename(cc_compiler_path) != "str" and
+            cc_compiler_path != none {
         throw new TypeError("CC compiler path must be an str.")
+    }
+    var cc_default = process.get_env("CC")
+    if cc_default == none {
+        if system.osname.lower() == "windows" {
+            cc_default = "gcc.exe"
+        } else {
+            cc_default = "gcc"
+        }
+    }
+    if cc_compiler_path == none {
+        cc_compiler_path = cc_default
     }
     self.cc_compiler_path = cc_compiler_path
     self.cxx_compiler_path = cxx_compiler_path
@@ -69,7 +82,7 @@ func CToolchain.init(
         base_candidate = base_candidate.sub(
             1, base_candidate.len - len("-cc")
         )
-    } elseif path.basename(base_candidate) == "gcc" and
+    } elseif path.basename(base_candidate) == "gcc" or
             path.basename(base_candidate) == "cc" {
         if self.cxx_compiler_path == none {
             if path.basename(base_candidate) == "gcc" {
@@ -99,7 +112,13 @@ func CToolchain.detect_info {
     var ext = self.check_library_extension() later:
 
     await ext
-    self.known_library_ext = ext
+    if ext == ".dylib" {
+        self.known_shared_lib_flags =
+            "-dynamiclib -undefined dynamic_lookup"
+    } elseif ext != none {
+        self.known_shared_lib_flags = "-shared"
+    }
+    self.known_shared_lib_ext = ext
 }
 
 func CToolchain.check_library_extension {
@@ -130,10 +149,12 @@ func CToolchain.check_library_extension {
     var success = self.test_run_in_dir(
         self.cc_compiler_path, args=[
             "-shared", "-o", "libtest.dll",
-            "test.c",
-            "-Wl,--out-implib,libtest_dll.a"
+            "test.c"
         ],
         test_file_contents=("#include <windows.h>\n"
+            "#if !defined(WIN_32) && !defined(_WIN64)\n"
+            "#error \"Not any recognized Windows compiler\"\n"
+            "#endif\n"
             "int test() {return 5;}"),
         result_file_name="libtest.dll"
     ) later:
@@ -245,15 +266,7 @@ func CToolchain.test_run_in_dir(
 
 func process_show_info_for_refs(refs, verbose=no) {
     func show_c_toolchain_info_for_ref(ref, verbose=verbose) {
-        var cc_default = process.get_env("CC")
-        if cc_default == none {
-            if system.osname.lower() == "windows" {
-                cc_default = "gcc.exe"
-            } else {
-                cc_default = "gcc"
-            }
-        }
-        var ctool = new CToolchain(cc_default)
+        var ctool = new CToolchain()
         ctool.detect_info() later:
 
         var ref_name = if ref.package_name != none
@@ -274,8 +287,10 @@ func process_show_info_for_refs(refs, verbose=no) {
             ctool.cxx_compiler_path.as_str())
         print("AR tool detected: " +
             ctool.ar_tool_path.as_str())
-        print("Library extensions detected: " +
-            ctool.known_library_ext.as_str())
+        print("Shared library build flags detected: " +
+            ctool.known_shared_lib_flags.as_str())
+        print("Shared library file extension detected: " +
+            ctool.known_shared_lib_ext.as_str())
         return later
     }
     var queue = refs.copy()
