@@ -547,7 +547,10 @@ func parse_and_populate_package_refs(refs, verbose=verbose) {
 
     await result
     if not success {
-        return none
+        throw new ValueError(
+            "The refs could be parsed, but no package info "
+            "extracted from at least one of the given locations."
+        )
     }
     return parsed_refs
 }

@@ -365,6 +365,7 @@ func actionparser_build_template(args, verbose=no) {
         print("Did you specify existing horp packages?")
         return 1
     }
+    assert(target_refs != none)
     if not {"apply", "list"}.has(result.args["action"]) {
         print("horp: error: Unknown action \"" +
             result.args["action"] + "\".")
