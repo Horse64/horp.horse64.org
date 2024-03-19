@@ -76,17 +76,20 @@ func CToolchain.init(
     }
     if base_candidate.ends("-gcc") {
         base_candidate = base_candidate.sub(
-            1, base_candidate.len - len("-gcc")
+            1, base_candidate.len - "-gcc".len
         )
     } elseif base_candidate.ends("-cc") {
         base_candidate = base_candidate.sub(
-            1, base_candidate.len - len("-cc")
+            1, base_candidate.len - "-cc".len
         )
     } elseif path.basename(base_candidate) == "gcc" or
-            path.basename(base_candidate) == "cc" {
+            path.basename(base_candidate) == "cc" or
+            path.basename(base_candidate) == "clang" {
         if self.cxx_compiler_path == none {
             if path.basename(base_candidate) == "gcc" {
                 self.cxx_compiler_path = "g++"
+            } elseif path.basename(base_candidate) == "clang" {
+                self.cxx_compiler_path = "clang++"
             } else {
                 self.cxx_compiler_path = "c++"
             }
@@ -103,7 +106,7 @@ func CToolchain.init(
             self.cxx_compiler_path = self.toolchain_base + "-g++"
         }
         if self.ar_tool_path == none {
-            self.ar_tool_path = self.ar_tool_path + "-ar"
+            self.ar_tool_path = self.toolchain_base + "-ar"
         }
     }
 }
