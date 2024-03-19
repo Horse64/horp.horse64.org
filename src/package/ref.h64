@@ -166,7 +166,7 @@ func get_package_ending_space(s) {
                     not current_name.endswith("/") and
                     current_name != "." and
                     current_name != "./" and
-                    (system.osname() != "windows" or (
+                    (system.osname.lower() != "windows" or (
                      not s.sub(last_start, i - 1).endswith("\\") and
                      current_name != "\\")) {
                 # This is likely a resuming whitespace, inside
@@ -188,7 +188,7 @@ func get_package_ending_space(s) {
                 seen_dot_in_last = yes
             }
             if s[i] == "/" or (
-                    system.osname() == "windows" and
+                    system.osname.lower() == "windows" and
                     s[i] == "\\") {
                 seen_path_sep_in_last = yes
             }
@@ -235,7 +235,7 @@ func extract_first_pkgname_with_constraints(s) {
     if not pkgname_or_ref.ends(".zip") and
             not pkgname_or_ref.has("/") and
             not pkgname_or_ref.startswith(".") and
-            (system.osname() != "windows" or
+            (system.osname.lower() != "windows" or
             not pkgname_or_ref.has("\\")) {
         # Package name is not a path, so validate it:
         pkgname_or_ref = package.

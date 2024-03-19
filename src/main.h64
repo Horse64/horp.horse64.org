@@ -207,7 +207,8 @@ func actionparser_add(args, verbose=no) {
 
 func version_output_for_terminal {
     return "horp v" + system.program_version() + ", built by " +
-        system.program_compiler_name + ".\n" +
+        system.program_compiler_name + ", running on " +
+        system.osname + ".\n" +
         "Copyright (c) 2020-2024, ellie/@ell1e & Horse64 Team."
 }
 
