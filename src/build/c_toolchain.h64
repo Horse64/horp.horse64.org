@@ -272,14 +272,7 @@ func process_show_info_for_refs(refs, verbose=no) {
         var ctool = new CToolchain()
         ctool.detect_info() later:
 
-        var ref_name = if ref.package_name != none
-            (ref.package_name + " at ") else
-            ("package at ") + ref.location
-        if ref_name.len > 50 {
-            ref_name = "..." + ref_name.sub(
-                ref_name.len - 50
-            )
-        }
+        var ref_name = ref.get_printable_name(max_len=50)
         heading = "C toolchain info for " + ref_name
         print(heading)
         print("=".rep(heading.glyph_len))
@@ -294,6 +287,7 @@ func process_show_info_for_refs(refs, verbose=no) {
             ctool.known_shared_lib_flags.as_str())
         print("Shared library file extension detected: " +
             ctool.known_shared_lib_ext.as_str())
+        print("")
         return later
     }
     var queue = refs.copy()
@@ -325,7 +319,7 @@ func actionparser_build_c_toolchain(args, verbose=no) {
         description="Run the build, or output info about "
         "the build.")
     defs.add_arg("action", description="Specify an action to execute, "
-        "available choices being \"show\" (detect and output "
+        "available choices being \"info\" (detect and output "
         "info about C toolchain available).")
     defs.add_arg(
         "package refs", description="The packages for which "
@@ -352,14 +346,14 @@ func actionparser_build_c_toolchain(args, verbose=no) {
         print("Did you specify existing horp packages?")
         return 1
     }
-    if not {"show"}.has(result.args["action"]) {
+    if not {"info"}.has(result.args["action"]) {
         print("horp: error: Unknown action \"" +
             result.args["action"] + "\".")
         print("Use horp build c_toolchain --help "
             "to show available actions.")
         return later 1
     }
-    assert(result.args["action"] == "show")
+    assert(result.args["action"] == "info")
     var exit_code = process_show_info_for_refs(
         target_refs, verbose=verbose
     ) later:

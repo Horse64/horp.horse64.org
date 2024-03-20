@@ -30,6 +30,7 @@ import system from core.horse64.org
 
 import build.template
 import package
+import package.conf
 import package.ref as ref
 import package.servermeta
 
@@ -75,12 +76,13 @@ func print_info_list_files(refs, limit_to_kind=none,
     ) later repeat
 }
 
-func actionparser_info(args, verbose=no) {
+func actionparser_show(args, verbose=no) {
     var defs = argparse.ArgumentDefs(
-        program_name="horp info", description="Show info about the given "
+        program_name="horp show", description="Show various things "
+            "like general info about the given "
             "packages.")
     defs.add_arg("action", description="Specify an action to execute, "
-        "available choices being: 1. \"general\" (show the general info), "
+        "available choices being: 1. \"info\" (show the general info), "
         "2. \"files\" (list all files known to belong to the package), "
         "3. \"code-files\" (list all code files of the package), "
         "4. \"code-files-no-templates\" (list all code files, but "
@@ -90,10 +92,10 @@ func actionparser_info(args, verbose=no) {
         "for example \"documentation files\".")
     defs.add_arg(
         "package refs", description="Package refs " +
-        package_refs_explainer + " to print "
-        "information about, like version, source location, etc.")
+        package_refs_explainer + " to show "
+        "details about, like version, source location, etc.")
     defs.add_switch("--verbose", description="Output extra information "
-        "when assembling the info.")
+        "when assembling the requested details.")
     var result = argparse.parse(defs, args)
     if result.output != "" {
         print(result.output)
@@ -150,14 +152,14 @@ func actionparser_info(args, verbose=no) {
     }
 
     # Figure out what info we should actually provide:
-    var result = print_info_list_files_if_needed(
+    var print_result = print_info_list_files_if_needed(
         target_refs, verbose=verbose) later:
 
-    await result
-    if result != none {
-        return result
+    await print_result
+    if print_result != none {
+        return print_result
     }
-    if result.args["action"] != "general" {
+    if result.args["action"] != "info" {
         print("horp: error: Encountered unknown action: " +
             result.args["action"])
         print("Use horp info --help to show the usage.")
@@ -166,8 +168,45 @@ func actionparser_info(args, verbose=no) {
 
     # If we arrive here we weren't asked to do anything special,
     # so just print out the basic refs:
-    print("Package refs: " + target_refs.as_str())
-    return 0
+    func print_general_info(pref) {
+        var ref_name = pref.get_printable_name(max_len=50)
+        heading = "General info for " + ref_name
+        print(heading)
+        print("=".rep(heading.glyph_len))
+        print("Name: " + pref.package_name.as_str())
+        print("Location: " + pref.location.as_str())
+        print("Config at: " + pref.get_conf_uri())
+        var conf = pref.get_conf(return_none_on_error=yes)
+        later:
+
+        await conf
+        if conf != none and conf.values.has("package") and
+                conf.values["package"].has("version") {
+            print("Version: " +
+                conf.values["package"]["version"].as_str())
+        }
+        if conf != none and conf.values.has("package") and
+                conf.values["package"].has("description") {
+            print("Description: " +
+                conf.values["package"]["description"].as_str())
+        }
+        print("")
+    }
+
+    var queue = target_refs.copy()
+    if queue.len == 0 {
+        return later 0
+    }
+    var next_entry = queue.pop()
+    var print_result = print_general_info(next_entry)
+    later:
+
+    await print_result
+    if queue.len == 0 {
+        return later 0
+    }
+    next_entry = queue.pop()
+    print_result = print_general_info(next_entry) later repeat
 }
 
 func actionparser_add(args, verbose=no) {
@@ -233,7 +272,8 @@ func main {
         "when doing things.")
     defs.add_switch(
         "--license",
-        description="Print out the program's licensing.",
+        description="Print out horp's own licensing (not that "
+            "of any package).",
         action_func=license_output_for_terminal)
     defs.add_switch(
         "--version", aliases=["-V", "-version"],
@@ -251,8 +291,8 @@ func main {
 
         await return_code
         return return_code
-    } elseif result.args["action"] == "info" {
-        var return_code = actionparser_info(
+    } elseif result.args["action"] == "show" {
+        var return_code = actionparser_show(
             result.args["action args"],
             verbose=result.args["--verbose"]) later:
 
@@ -270,16 +310,22 @@ func main {
         var commonly_wrong = {
             "add"-> {"install"},
             "add --reinstall"-> {"reinstall"},
-            "info"-> {"show"},
+            "show info"-> {"info"},
             "del"-> {"delete", "remove", "uninstall"},
         }
         print("horp: error: Unknown action: " + result.args["action"])
         print("Use horp --help to show usage.")
         for entry in commonly_wrong {
             var variants = commonly_wrong[entry]
-            if variants.has(result.args["action"].lower()) or
-                    entry.lower() == result.args["action"] {
-                print('Did you maybe mean to use "horp ' + entry + '"?')
+            for variant in variants {
+                if variant.lower() == result.args["action"].lower() or
+                        variant.lower().starts(
+                            result.args["action"].lower() + " "
+                        ) or
+                        entry.lower() == result.args["action"] {
+                    print('Did you maybe mean to use '
+                        '"horp ' + entry + '"?')
+                }
             }
         }
         return 1

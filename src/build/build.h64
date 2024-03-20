@@ -30,7 +30,7 @@ import argparse from core.horse64.org
 import build.c_toolchain
 import build.template
 
-func actionparser_build_show(args, verbose=no) {
+func actionparser_build_info(args, verbose=no) {
     var defs = argparse.ArgumentDefs(
         program_name="horp build info",
         description="Output info about "
@@ -81,7 +81,7 @@ func actionparser_build(args, verbose=no) {
         description="Run the build, or output info about "
         "the build, or access build submodules.")
     defs.add_arg("action", description="Specify an action to execute, "
-        "available choices being \"show\" (output general "
+        "available choices being \"info\" (output general "
         "info about the build of a package), \"template\" "
         "(access the template functions), \"c_toolchain\" "
         "(access the C toolchain functions).")
@@ -98,11 +98,21 @@ func actionparser_build(args, verbose=no) {
         verbose = yes
     }
 
-    if not {"show", "template",
+    if not {"info", "template",
             "c_toolchain"}.has(result.args["action"]) {
+        var commonly_wrong = {
+            "info"-> {"show"},
+        }
         print("horp: error: Unknown action \"" +
             result.args["action"] + "\".")
         print("Use horp build --help to show available actions.")
+        for entry in commonly_wrong {
+            var variants = commonly_wrong[entry]
+            if variants.has(result.args["action"].lower()) or
+                    entry.lower() == result.args["action"] {
+                print('Did you maybe mean to use "horp ' + entry + '"?')
+            }
+        }
         return later 1
     }
     if result.args["action"] == "template" {
@@ -113,8 +123,8 @@ func actionparser_build(args, verbose=no) {
 
         await return_code
         return return_code
-    } elseif result.args["action"] == "show" {
-        var return_code = actionparser_build_show(
+    } elseif result.args["action"] == "info" {
+        var return_code = actionparser_build_info(
             result.args["action args"],
             verbose=result.args["--verbose"]
         ) later:

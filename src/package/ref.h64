@@ -36,6 +36,7 @@ import uri from core.horse64.org
 import constraint
 import limit
 import package
+import package.conf
 import package.servermeta as servermeta
 
 const version_comp_tokens = {
@@ -70,6 +71,47 @@ func PackageRef.init(pkgname, constraints, location) {
     self.location = location
     self.package_name = pkgname
     self.constraints = constraints
+}
+
+func PackageRef.get_conf(return_none_on_error=no) {
+    var conf_uri = self.get_conf_uri()
+    if conf_uri == none {
+        return none
+    }
+    var conf = package.conf.load_from_uri(conf_uri)
+    later:
+
+    do {
+        await conf
+    } rescue e {
+        if not return_none_on_error {
+            throw e
+        }
+        return none
+    }
+    return conf
+}
+
+func PackageRef.get_conf_uri {
+    if self.location == none {
+        return none
+    }
+    return uri.add_part(self.location, "horp.conf")
+}
+
+func PackageRef.get_printable_name(max_len=none) {
+    var ref_name = if self.package_name != none
+        (self.package_name + " at ") else
+        ("package at ") + self.location
+    if max_len != none and ref_name.len > max_len {
+        if max_len <= 1 {
+            return ref_name.sub(1, math.max(0, max_len))
+        }
+        ref_name = "..." + ref_name.sub(
+            ref_name.len - max_len
+        )
+    }
+    return ref_name
 }
 
 func PackageRef.as_str() {
