@@ -1,5 +1,5 @@
 ## @module main
-# Copyright (c) 2020-2024, ellie/@ell1e & Horp Team (see AUTHORS.md).
+# Copyright (c) 2020-2024, ellie/@ell1e & Horp authors (see AUTHORS.md).
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -245,16 +245,21 @@ func actionparser_add(args, verbose=no) {
 }
 
 func version_output_for_terminal {
-    return "horp v" + system.program_version() + ", built by " +
+    return later "horp v" + system.program_version + ", built by " +
         system.program_compiler_name + ", running on " +
         system.osname + ".\n" +
-        "Copyright (c) 2020-2024, ellie/@ell1e & Horse64 Team."
+        "Copyright (c) 2020-2024, ellie/@ell1e & Horp authors."
 }
 
 func license_output_for_terminal {
-    return "All horp license info with no guarantee of "
-        "completeness or accuracy:\n" +
-        system.program_license_text(layout_width=79)
+    var t = "All horp license info with no guarantee of "
+        "completeness or accuracy:\n"
+    var t2 = system.program_license_text(layout_width=79)
+    later:
+
+    await t2
+    t += t2
+    return later t
 }
 
 func main {
