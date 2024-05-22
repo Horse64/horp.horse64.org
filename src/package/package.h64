@@ -394,3 +394,12 @@ func remove_subdomain_from_package(pname) {
     return pname.sub(firstdotpos + 1)
 }
 
+## For a given package in the given folder, find its horse_modules
+## directory and check if it contains a specified dependency.
+## @param package_dir The package's base directory.
+## @param dep_pkg_name The dependency package's name to check for.
+## @returns yes if the dependency was found, no if not
+func is_dep_in_pkg_mod_dir(package_dir, dep_pkg_name) {
+    throw new RuntimeError("Not implemented yet.")
+}
+
