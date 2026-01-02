@@ -15,7 +15,7 @@ Files outside of the `vendor` directory are, unless indicated
 otherwise, licensed under the following **BSD-2-Clause license**:
 
 ```
-Copyright (c) 2020-2025, ellie/@ell1e & Horp authors (see AUTHORS.md).
+Copyright (c) 2020-2026, ellie/@ell1e & Horp authors (see AUTHORS.md).
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
