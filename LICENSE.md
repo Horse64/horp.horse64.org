@@ -15,7 +15,8 @@ Files outside of the `vendor` directory are, unless indicated
 otherwise, licensed under the following **BSD-2-Clause license**:
 
 ```
-Copyright (c) 2020-2026, ellie/@ell1e & Horp authors (see AUTHORS.md).
+Copyright (c) 2020-2026, ellie/@ell1e & Horp contributors
+(see AUTHORS.md).
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -246,12 +247,35 @@ following **Apache 2 License**:
    See the License for the specific language governing permissions and
    limitations under the License.
 ```
+...with the following copyright notice:
+
+```
+Copyright (c) 2020-2026, ellie/@ell1e & Horp contributors
+(see AUTHORS.md).
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
 
 
 Contributions, Binaries
 -----------------------
 
-Same rules apply as for [main repo contributions, including the DCO](
+The same rules apply as for [main repo contributions, including the DCO](
     https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#contributions).
-Also, official horp binaries may include [the official logo](
-    https://codeberg.org/Horse64/core.horse64.org/src/branch/main/LICENSE.md#logo-license).
+
+Also, official Horp binaries may ship with or fetch
+[the official logos](
+    https://codeberg.org/Horse64/branding/src/branch/main/LICENSE.md)
+on demand, if updates are permitted by the user. Remember to disable
+that and to change the project name if you ever fork Horp.
+
