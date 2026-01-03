@@ -266,7 +266,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-**AI training on this repository isn't permitted.**
+**We ask you don't use AI training on this repository, since it seems
+potentially incompatible with attribution requirements like above.**
+(This isn't legal advice. But please don't train AI on this, thanks.)
 
 
 Contributions, Binaries
